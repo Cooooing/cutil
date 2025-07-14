@@ -2,15 +2,16 @@ package stream
 
 import (
 	"context"
+	"fmt"
 	"testing"
 )
 
 func TestName(t *testing.T) {
 	ints := []int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}
+	strs := []string{"Go", "Java", "Python", "C", "C++", "Rust", "C#", "PHP", "JavaScript", "TypeScript"}
 
 	ctx, cancel := context.WithCancelCause(context.Background())
-	New[int](ctx).
-		Of(ints...).
+	Of[int](ctx, ints...).
 		Peek(func(i int) {
 			t.Logf("peek: %d", i)
 		}).
@@ -24,5 +25,22 @@ func TestName(t *testing.T) {
 		ForEach(func(i int) {
 			t.Logf("forEach: %d", i)
 		})
+	fmt.Println()
+	Map[int, int](Of[int](ctx, ints...), func(i int) int {
+		return i * 2
+	}).ForEach(func(i int) {
+		t.Logf("forEach: %d", i)
+	})
+	fmt.Println()
+	FlatMap[string, string](Of[string](ctx, strs...), func(s string) Stream[string] {
+		var t []string
+		for i := range []byte(s) {
+			t = append(t, string(s[i]))
+		}
+		return Of[string](ctx, t...)
+	}).ForEach(func(s string) {
+		t.Logf("forEach: %s", s)
+	})
+
 	cancel(nil)
 }

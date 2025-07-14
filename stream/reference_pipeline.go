@@ -10,28 +10,11 @@ type ReferencePipeline[T any] struct {
 	out chan chan T
 }
 
-func New[T any](ctx context.Context) *ReferencePipeline[T] {
+func newReferencePipeline[T any](ctx context.Context) *ReferencePipeline[T] {
 	return &ReferencePipeline[T]{
 		ctx: ctx,
 		out: make(chan chan T, 1),
 	}
-}
-
-func (p *ReferencePipeline[T]) Of(values ...T) Stream[T] {
-	out := make(chan T, 1)
-	p.out <- out
-
-	go func() {
-		defer close(out)
-		for _, v := range values {
-			select {
-			case <-p.ctx.Done():
-				return
-			case out <- v:
-			}
-		}
-	}()
-	return p
 }
 
 func (p *ReferencePipeline[T]) Filter(predicate cutil.Predicate[T]) Stream[T] {
@@ -140,13 +123,21 @@ func (p *ReferencePipeline[T]) ForEachOrdered(action cutil.Consumer[T]) {
 }
 
 func (p *ReferencePipeline[T]) ToArray() []T {
-	// TODO implement me
-	panic("implement me")
+	in := <-p.out
+	array := make([]T, 0)
+	for v := range in {
+		array = append(array, v)
+	}
+	return array
 }
 
 func (p *ReferencePipeline[T]) Count() int64 {
-	// TODO implement me
-	panic("implement me")
+	in := <-p.out
+	count := int64(0)
+	for _ = range in {
+		count++
+	}
+	return count
 }
 
 func (p *ReferencePipeline[T]) AnyMatch(predicate cutil.Predicate[T]) bool {
@@ -170,7 +161,7 @@ func (p *ReferencePipeline[T]) closeChan() chan T {
 	return ch
 }
 
-func (p *ReferencePipeline[T]) Done() <-chan T {
+func (p *ReferencePipeline[T]) done() chan T {
 	select {
 	case ch, ok := <-p.out:
 		if !ok {
@@ -180,4 +171,8 @@ func (p *ReferencePipeline[T]) Done() <-chan T {
 	case <-p.ctx.Done():
 		return p.closeChan()
 	}
+}
+
+func (p *ReferencePipeline[T]) getCtx() context.Context {
+	return p.ctx
 }
