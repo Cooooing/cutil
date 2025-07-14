@@ -140,8 +140,18 @@ func FlatMap[T any, R any, S Stream[R]](stream Stream[T], mapper cutil.Function[
 	return OfChan(stream.getCtx(), out)
 }
 
-func Concat[T any](a Stream[T], b Stream[T]) Stream[T] {
-	return OfChan(a.getCtx(), a.done(), b.done())
+// Concat 返回一个流，该流由给定的多个流中的所有元素组成。
+func Concat[T any](streams ...Stream[T]) Stream[T] {
+	// Todo 返回空流
+	if len(streams) == 0 {
+		return nil
+	}
+	ctx := streams[0].getCtx()
+	var chs []chan T
+	for _, s := range streams {
+		chs = append(chs, s.done())
+	}
+	return OfChan(ctx, chs...)
 }
 
 func Generate[T any](s cutil.Supplier[T]) Stream[T] {

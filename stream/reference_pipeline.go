@@ -90,10 +90,10 @@ func (p *ReferencePipeline[T]) Skip(n int64) Stream[T] {
 
 	go func() {
 		defer close(out)
-		count := 0
+		count := int64(0)
 		for v := range in {
 			count++
-			if count <= int(n) {
+			if count <= n {
 				continue
 			}
 			select {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"testing"
+	"time"
 )
 
 func TestName(t *testing.T) {
@@ -40,6 +41,25 @@ func TestName(t *testing.T) {
 		return Of[string](ctx, t...)
 	}).ForEach(func(s string) {
 		t.Logf("forEach: %s", s)
+	})
+
+	fmt.Println()
+	ch := make(chan int)
+	go func() {
+		defer close(ch)
+		timer := time.NewTicker(time.Second)
+		defer timer.Stop()
+		for i := 0; i < 10; i++ {
+			select {
+			case <-timer.C:
+				ch <- 1
+			case <-ctx.Done():
+				return
+			}
+		}
+	}()
+	OfChan[int](ctx, ch).ForEach(func(i int) {
+		t.Logf("forEach: %d", i)
 	})
 
 	cancel(nil)
