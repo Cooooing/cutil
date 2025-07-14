@@ -75,8 +75,30 @@ func (p *ReferencePipeline[T]) Peek(action cutil.Consumer[T]) Stream[T] {
 }
 
 func (p *ReferencePipeline[T]) Limit(maxSize int64) Stream[T] {
-	// TODO implement me
-	panic("implement me")
+	in, ok := <-p.out
+	if !ok {
+		p.out <- p.closeChan()
+		return p
+	}
+	out := make(chan T, 1)
+	p.out <- out
+
+	go func() {
+		defer close(out)
+		count := int64(0)
+		for v := range in {
+			count++
+			if count > maxSize {
+				break
+			}
+			select {
+			case <-p.ctx.Done():
+				return
+			case out <- v:
+			}
+		}
+	}()
+	return p
 }
 
 func (p *ReferencePipeline[T]) Skip(n int64) Stream[T] {

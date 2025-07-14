@@ -6,12 +6,7 @@ import (
 )
 
 type Stream[T any] interface {
-	// 源操作
-
-	// Of 从指定元素创建一个流（有限流）
-	// Of(values ...T) Stream[T]
-	// OfChan 从指定通道创建一个流（无限流）
-	// OfChan(chan T) Stream[T]
+	// 源操作（创建流）
 
 	// 中间操作
 
@@ -21,6 +16,8 @@ type Stream[T any] interface {
 	Filter(predicate cutil.Predicate[T]) Stream[T]
 	// Skip 在丢弃流的前n个元素后，返回由该流的其余元素组成的流。如果此流包含的元素少于n个，则将返回一个空流。
 	Skip(n int64) Stream[T]
+	// Limit 返回一个由该流的元素组成的流，该流被截断为长度不超过maxSize。
+	Limit(maxSize int64) Stream[T]
 
 	// 终止操作
 
@@ -30,6 +27,7 @@ type Stream[T any] interface {
 	ToArray() []T
 	// Count 返回此流中的元素数。
 	Count() int64
+
 	// done 返回一个通道，用于接收流中的元素。内部方法
 	done() chan T
 
@@ -44,9 +42,9 @@ type Stream[T any] interface {
 	// LongStream mapToLong(ToLongFunction mapper)
 	// DoubleStream mapToDouble(ToDoubleFunction mapper)
 	Distinct() Stream[T]
-	// Sorted() Stream[T]
+	// Sorted() FlagStream[T]
 	Sorted(comparator cutil.Comparator[T]) Stream[T]
-	Limit(maxSize int64) Stream[T]
+
 	ForEachOrdered(action cutil.Consumer[T])
 	// Object reduce(Object identity, BinaryOperator accumulator)
 	// Optional reduce(BinaryOperator accumulator)
@@ -65,7 +63,7 @@ type Stream[T any] interface {
 	// LongStream flatMapToLong(Function mapper)
 	// IntStream flatMapToInt(Function mapper)
 	// Iterator iterator()
-	// Spliterator spliterator()
+	// FlagSpliterator spliterator()
 	// boolean isParallel()
 	// BaseStream sequential()
 	// BaseStream parallel()
@@ -74,6 +72,7 @@ type Stream[T any] interface {
 	// void close()
 }
 
+// Of 从指定元素创建一个流（有限流）
 func Of[T any](ctx context.Context, values ...T) Stream[T] {
 	p := newReferencePipeline[T](ctx)
 	out := make(chan T, 1)
@@ -91,6 +90,7 @@ func Of[T any](ctx context.Context, values ...T) Stream[T] {
 	return p
 }
 
+// OfChan 从指定通道创建一个流（无限流）
 func OfChan[T any](ctx context.Context, ins ...chan T) Stream[T] {
 	p := newReferencePipeline[T](ctx)
 	out := make(chan T, 1)
