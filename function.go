@@ -6,4 +6,5 @@ type (
 	Supplier[T any]        func() T
 	Predicate[T any]       func(T) bool
 	Comparator[T any]      func(T, T) int
+	UnaryOperator[T any]   func(T) T
 )
