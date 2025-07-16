@@ -39,15 +39,26 @@ func newPipeline[T any](ctx context.Context) *Pipeline[T] {
 func (p *Pipeline[T]) Map(action cutil.UnaryOperator[T]) Stream[T] {
 	in, out := p.initOp()
 	p.wg.Add(p.parallelGoroutines)
+	var currentWg sync.WaitGroup
+	currentWg.Add(p.parallelGoroutines)
+	go func() {
+		currentWg.Wait()
+		close(out)
+	}()
 	for i := 0; i < p.parallelGoroutines; i++ {
 		go func() {
 			defer p.wg.Done()
-			defer close(out)
-			for v := range in {
+			defer currentWg.Done()
+			for {
 				select {
 				case <-p.ctx.Done():
+					p.sendErr(p.ctx.Err())
 					return
-				case out <- action(v):
+				case v, ok := <-in:
+					if !ok {
+						return
+					}
+					out <- action(v)
 				}
 			}
 		}()
@@ -58,14 +69,21 @@ func (p *Pipeline[T]) Map(action cutil.UnaryOperator[T]) Stream[T] {
 func (p *Pipeline[T]) Peek(action cutil.Consumer[T]) Stream[T] {
 	in, out := p.initOp()
 	p.wg.Add(p.parallelGoroutines)
+	var currentWg sync.WaitGroup
+	currentWg.Add(p.parallelGoroutines)
+	go func() {
+		currentWg.Wait()
+		close(out)
+	}()
 	for i := 0; i < p.parallelGoroutines; i++ {
 		go func() {
 			defer p.wg.Done()
-			defer close(out)
+			defer currentWg.Done()
 			for v := range in {
 				action(v)
 				select {
 				case <-p.ctx.Done():
+					p.sendErr(p.ctx.Err())
 					return
 				case out <- v:
 				}
@@ -78,14 +96,21 @@ func (p *Pipeline[T]) Peek(action cutil.Consumer[T]) Stream[T] {
 func (p *Pipeline[T]) Filter(predicate cutil.Predicate[T]) Stream[T] {
 	in, out := p.initOp()
 	p.wg.Add(p.parallelGoroutines)
+	var currentWg sync.WaitGroup
+	currentWg.Add(p.parallelGoroutines)
+	go func() {
+		currentWg.Wait()
+		close(out)
+	}()
 	for i := 0; i < p.parallelGoroutines; i++ {
 		go func() {
 			defer p.wg.Done()
-			defer close(out)
+			defer currentWg.Done()
 			for v := range in {
 				if predicate(v) {
 					select {
 					case <-p.ctx.Done():
+						p.sendErr(p.ctx.Err())
 						return
 					case out <- v:
 					}
@@ -110,6 +135,7 @@ func (p *Pipeline[T]) Skip(n int) Stream[T] {
 			}
 			select {
 			case <-p.ctx.Done():
+				p.sendErr(p.ctx.Err())
 				return
 			case out <- v:
 			}
@@ -131,6 +157,7 @@ func (p *Pipeline[T]) Limit(maxSize int) Stream[T] {
 			}
 			select {
 			case <-p.ctx.Done():
+				p.sendErr(p.ctx.Err())
 				return
 			case out <- v:
 			}
@@ -151,6 +178,7 @@ func (p *Pipeline[T]) Distinct() Stream[T] {
 				seen[v] = struct{}{}
 				select {
 				case <-p.ctx.Done():
+					p.sendErr(p.ctx.Err())
 					return
 				case out <- v:
 				}
@@ -168,8 +196,22 @@ func (p *Pipeline[T]) Sorted(comparator cutil.Comparator[T]) Stream[T] {
 		defer p.wg.Done()
 		defer close(out)
 		elements := make([]T, 0)
-		for v := range in {
-			elements = append(elements, v)
+		over := false
+		for {
+			select {
+			case <-p.ctx.Done():
+				p.sendErr(p.ctx.Err())
+				return
+			case v, ok := <-in:
+				if !ok {
+					over = true
+					break
+				}
+				elements = append(elements, v)
+			}
+			if over {
+				break
+			}
 		}
 		// 排序
 		sort.Slice(elements, func(i, j int) bool {
@@ -178,6 +220,7 @@ func (p *Pipeline[T]) Sorted(comparator cutil.Comparator[T]) Stream[T] {
 		for _, v := range elements {
 			select {
 			case <-p.ctx.Done():
+				p.sendErr(p.ctx.Err())
 				return
 			case out <- v:
 			}
@@ -193,11 +236,19 @@ func (p *Pipeline[T]) ForEach(action cutil.Consumer[T]) error {
 	if p.err != nil {
 		return p.err
 	}
-	for v := range in {
-		action(v)
+	for {
+		select {
+		case <-p.ctx.Done():
+			p.close()
+			return p.ctx.Err()
+		case v, ok := <-in:
+			if !ok {
+				p.close()
+				return p.err
+			}
+			action(v)
+		}
 	}
-	p.close()
-	return p.err
 }
 
 func (p *Pipeline[T]) ForEachOrdered(comparator cutil.Comparator[T], action cutil.Consumer[T]) error {
@@ -210,14 +261,19 @@ func (p *Pipeline[T]) AnyMatch(predicate cutil.Predicate[T]) (bool, error) {
 	if p.err != nil {
 		return false, p.err
 	}
-	for v := range in {
-		if predicate(v) {
+	for {
+		select {
+		case <-p.ctx.Done():
 			p.close()
-			return true, p.err
+			return false, p.ctx.Err()
+		case v, ok := <-in:
+			if !ok {
+				p.close()
+				return false, p.err
+			}
+			return predicate(v), p.err
 		}
 	}
-	p.close()
-	return false, p.err
 }
 
 func (p *Pipeline[T]) AllMatch(predicate cutil.Predicate[T]) (bool, error) {
@@ -225,14 +281,22 @@ func (p *Pipeline[T]) AllMatch(predicate cutil.Predicate[T]) (bool, error) {
 	if p.err != nil {
 		return false, p.err
 	}
-	for v := range in {
-		if !predicate(v) {
+	for {
+		select {
+		case <-p.ctx.Done():
 			p.close()
-			return false, p.err
+			return true, p.ctx.Err()
+		case v, ok := <-in:
+			if !ok {
+				p.close()
+				return true, p.err
+			}
+			if !predicate(v) {
+				p.close()
+				return false, p.err
+			}
 		}
 	}
-	p.close()
-	return true, p.err
 }
 
 func (p *Pipeline[T]) NoneMatch(predicate cutil.Predicate[T]) (bool, error) {
@@ -240,14 +304,22 @@ func (p *Pipeline[T]) NoneMatch(predicate cutil.Predicate[T]) (bool, error) {
 	if p.err != nil {
 		return false, p.err
 	}
-	for v := range in {
-		if predicate(v) {
+	for {
+		select {
+		case <-p.ctx.Done():
 			p.close()
-			return false, p.err
+			return true, p.ctx.Err()
+		case v, ok := <-in:
+			if !ok {
+				p.close()
+				return true, p.err
+			}
+			if predicate(v) {
+				p.close()
+				return false, p.err
+			}
 		}
 	}
-	p.close()
-	return true, p.err
 }
 
 func (p *Pipeline[T]) ToArray() ([]T, error) {
@@ -256,11 +328,19 @@ func (p *Pipeline[T]) ToArray() ([]T, error) {
 		return nil, p.err
 	}
 	array := make([]T, 0)
-	for v := range in {
-		array = append(array, v)
+	for {
+		select {
+		case <-p.ctx.Done():
+			p.close()
+			return array, p.ctx.Err()
+		case v, ok := <-in:
+			if !ok {
+				p.close()
+				return array, p.err
+			}
+			array = append(array, v)
+		}
 	}
-	p.close()
-	return array, p.err
 }
 
 func (p *Pipeline[T]) Count() (int, error) {
@@ -269,11 +349,19 @@ func (p *Pipeline[T]) Count() (int, error) {
 		return 0, p.err
 	}
 	count := 0
-	for range in {
-		count++
+	for {
+		select {
+		case <-p.ctx.Done():
+			p.close()
+			return count, p.ctx.Err()
+		case _, ok := <-in:
+			if !ok {
+				p.close()
+				return count, p.err
+			}
+			count++
+		}
 	}
-	p.close()
-	return count, p.err
 }
 
 func (p *Pipeline[T]) Min(comparator cutil.Comparator[T]) (T, error) {
@@ -283,19 +371,21 @@ func (p *Pipeline[T]) Min(comparator cutil.Comparator[T]) (T, error) {
 		return zero, p.err
 	}
 	var m T
-	for v := range in {
+	for {
 		select {
 		case <-p.ctx.Done():
 			p.close()
-			return zero, p.err
-		default:
+			return zero, p.ctx.Err()
+		case v, ok := <-in:
+			if !ok {
+				p.close()
+				return m, p.err
+			}
 			if comparator(v, m) < 0 {
 				m = v
 			}
 		}
 	}
-	p.close()
-	return m, p.err
 }
 
 func (p *Pipeline[T]) Max(comparator cutil.Comparator[T]) (T, error) {
@@ -305,19 +395,21 @@ func (p *Pipeline[T]) Max(comparator cutil.Comparator[T]) (T, error) {
 		return zero, p.err
 	}
 	var m T
-	for v := range in {
+	for {
 		select {
 		case <-p.ctx.Done():
 			p.close()
-			return zero, p.err
-		default:
+			return zero, p.ctx.Err()
+		case v, ok := <-in:
+			if !ok {
+				p.close()
+				return m, p.err
+			}
 			if comparator(v, m) > 0 {
 				m = v
 			}
 		}
 	}
-	p.close()
-	return m, p.err
 }
 
 func (p *Pipeline[T]) FindFirst() (T, error) {
@@ -326,17 +418,19 @@ func (p *Pipeline[T]) FindFirst() (T, error) {
 	if p.err != nil {
 		return m, p.err
 	}
-	for v := range in {
+	for {
 		select {
 		case <-p.ctx.Done():
 			p.close()
-			return m, p.err
-		default:
-			m = v
+			return m, p.ctx.Err()
+		case v, ok := <-in:
+			if !ok {
+				p.close()
+				return m, p.err
+			}
+			return v, p.err
 		}
 	}
-	p.close()
-	return m, p.err
 }
 func (p *Pipeline[T]) FindAny() (T, error) {
 	in := p.initTerminalOp()
@@ -344,47 +438,55 @@ func (p *Pipeline[T]) FindAny() (T, error) {
 	if p.err != nil {
 		return m, p.err
 	}
-	for v := range in {
+	for {
 		select {
 		case <-p.ctx.Done():
 			p.close()
-			return m, p.err
-		default:
-			m = v
+			return m, p.ctx.Err()
+		case v, ok := <-in:
+			if !ok {
+				p.close()
+				return m, p.err
+			}
+			return v, p.err
 		}
 	}
-	p.close()
-	return m, p.err
 }
 
 func (p *Pipeline[T]) Reduce(accumulator cutil.BinaryOperator[T]) (T, error) {
 	in := p.initTerminalOp()
 	var result T
-	for v := range in {
+	for {
 		select {
 		case <-p.ctx.Done():
 			var zero T
 			return zero, p.ctx.Err()
-		default:
+		case v, ok := <-in:
+			if !ok {
+				p.close()
+				return result, p.err
+			}
 			result = accumulator(result, v)
 		}
 	}
-	return result, nil
 }
 
 func (p *Pipeline[T]) ReduceByDefault(identity T, accumulator cutil.BinaryOperator[T]) (T, error) {
 	in := p.initTerminalOp()
 	result := identity
-	for v := range in {
+	for {
 		select {
 		case <-p.ctx.Done():
 			var zero T
 			return zero, p.ctx.Err()
-		default:
+		case v, ok := <-in:
+			if !ok {
+				p.close()
+				return result, p.err
+			}
 			result = accumulator(result, v)
 		}
 	}
-	return result, nil
 }
 
 func (p *Pipeline[T]) Iterator() chan T {

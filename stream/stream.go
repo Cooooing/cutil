@@ -65,7 +65,7 @@ type Stream[T any] interface {
 	close()
 	// IsParallel 返回是否是并行流
 	IsParallel() bool
-	// Parallel 将流转为并行流，设置并发协程数。
+	// Parallel 将流转为并行流，设置并发协程数。必须在创建流后紧接着调用。并行流不保证元素原始顺序。
 	Parallel(n int) Stream[T]
 }
 
@@ -152,7 +152,9 @@ func Concat[T any](ctx context.Context, streams ...Stream[T]) Stream[T] {
 
 // Empty 创建一个空流
 func Empty[T any](ctx context.Context) Stream[T] {
-	return newPipeline[T](ctx)
+	stream := newPipeline[T](ctx)
+	stream.out <- stream.closeChan()
+	return stream
 }
 
 // 流操作，返回一个流或结果，但流中数据或结果类型发生改变。（解决go中方法不能增加泛型的问题）
@@ -177,7 +179,7 @@ func Map[T any, R any](stream Stream[T], mapper cutil.Function[T, R]) Stream[R] 
 }
 
 // FlatMap 返回一个流，该流由将此流的每个元素替换为映射流的内容的结果组成，该映射流是通过将提供的映射函数应用于每个元素而生成的。每个映射的流在其内容被放入该流后都会被关闭。（如果映射的流为null，则使用空流。）
-func FlatMap[T any, R any, S Stream[R]](stream Stream[T], mapper cutil.Function[T, S]) Stream[R] {
+func FlatMap[T any, R any](stream Stream[T], mapper cutil.Function[T, Stream[R]]) Stream[R] {
 	in := stream.Iterator()
 	p := newPipeline[R](stream.getCtx())
 	out := make(chan R, 1)
