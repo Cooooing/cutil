@@ -3,6 +3,7 @@ package stream
 import (
 	"context"
 	"cutil"
+	"errors"
 	"reflect"
 	"testing"
 	"time"
@@ -307,7 +308,7 @@ func TestContextCancel(t *testing.T) {
 	if err == nil {
 		t.Error("ToArray() expected context canceled error, got nil")
 	}
-	if err != context.Canceled {
+	if !errors.Is(err, context.Canceled) {
 		t.Errorf("ToArray() error = %v, want context.Canceled", err)
 	}
 }

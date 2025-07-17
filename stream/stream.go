@@ -62,9 +62,11 @@ type Stream[T any] interface {
 	// getCtx 返回上下文
 	getCtx() context.Context
 	// close 关闭流
-	close()
+	close(err error)
 	// IsParallel 返回是否是并行流
 	IsParallel() bool
+	// GetParallelGoroutines 返回并行流并行线程数
+	GetParallelGoroutines() int
 	// Parallel 将流转为并行流，设置并发协程数。必须在创建流后紧接着调用。并行流不保证元素原始顺序。
 	Parallel(n int) Stream[T]
 }

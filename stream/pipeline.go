@@ -11,12 +11,12 @@ import (
 )
 
 type Pipeline[T any] struct {
-	ctx     context.Context
-	out     chan chan T
-	cancel  context.CancelFunc // 用于取消所有操作
-	err     error
-	errOnce sync.Once      // 确保只保留最初的错误
-	wg      sync.WaitGroup // 跟踪所有活动协程
+	ctx       context.Context
+	out       chan chan T
+	cancel    context.CancelFunc // 用于取消所有操作
+	err       error
+	closeOnce sync.Once      // 确保只关闭流一次
+	wg        sync.WaitGroup // 跟踪所有活动协程
 
 	linkedOrConsumed   bool // 标记流是否已被链接（添加新操作）或消耗（执行终端操作）。用于确保流的一次性使用，防止重复操作。
 	parallelGoroutines int  // 并行协程数，等于1时为顺序流，大于1时为并行流。
@@ -52,7 +52,7 @@ func (p *Pipeline[T]) Map(action cutil.UnaryOperator[T]) Stream[T] {
 			for {
 				select {
 				case <-p.ctx.Done():
-					p.sendErr(p.ctx.Err())
+					p.close(p.ctx.Err())
 					return
 				case v, ok := <-in:
 					if !ok {
@@ -83,7 +83,7 @@ func (p *Pipeline[T]) Peek(action cutil.Consumer[T]) Stream[T] {
 				action(v)
 				select {
 				case <-p.ctx.Done():
-					p.sendErr(p.ctx.Err())
+					p.close(p.ctx.Err())
 					return
 				case out <- v:
 				}
@@ -110,7 +110,7 @@ func (p *Pipeline[T]) Filter(predicate cutil.Predicate[T]) Stream[T] {
 				if predicate(v) {
 					select {
 					case <-p.ctx.Done():
-						p.sendErr(p.ctx.Err())
+						p.close(p.ctx.Err())
 						return
 					case out <- v:
 					}
@@ -135,7 +135,7 @@ func (p *Pipeline[T]) Skip(n int) Stream[T] {
 			}
 			select {
 			case <-p.ctx.Done():
-				p.sendErr(p.ctx.Err())
+				p.close(p.ctx.Err())
 				return
 			case out <- v:
 			}
@@ -157,7 +157,7 @@ func (p *Pipeline[T]) Limit(maxSize int) Stream[T] {
 			}
 			select {
 			case <-p.ctx.Done():
-				p.sendErr(p.ctx.Err())
+				p.close(p.ctx.Err())
 				return
 			case out <- v:
 			}
@@ -178,7 +178,7 @@ func (p *Pipeline[T]) Distinct() Stream[T] {
 				seen[v] = struct{}{}
 				select {
 				case <-p.ctx.Done():
-					p.sendErr(p.ctx.Err())
+					p.close(p.ctx.Err())
 					return
 				case out <- v:
 				}
@@ -200,7 +200,7 @@ func (p *Pipeline[T]) Sorted(comparator cutil.Comparator[T]) Stream[T] {
 		for {
 			select {
 			case <-p.ctx.Done():
-				p.sendErr(p.ctx.Err())
+				p.close(p.ctx.Err())
 				return
 			case v, ok := <-in:
 				if !ok {
@@ -220,7 +220,7 @@ func (p *Pipeline[T]) Sorted(comparator cutil.Comparator[T]) Stream[T] {
 		for _, v := range elements {
 			select {
 			case <-p.ctx.Done():
-				p.sendErr(p.ctx.Err())
+				p.close(p.ctx.Err())
 				return
 			case out <- v:
 			}
@@ -239,11 +239,11 @@ func (p *Pipeline[T]) ForEach(action cutil.Consumer[T]) error {
 	for {
 		select {
 		case <-p.ctx.Done():
-			p.close()
+			p.close(p.ctx.Err())
 			return p.ctx.Err()
 		case v, ok := <-in:
 			if !ok {
-				p.close()
+				p.close(p.err)
 				return p.err
 			}
 			action(v)
@@ -264,11 +264,11 @@ func (p *Pipeline[T]) AnyMatch(predicate cutil.Predicate[T]) (bool, error) {
 	for {
 		select {
 		case <-p.ctx.Done():
-			p.close()
+			p.close(p.ctx.Err())
 			return false, p.ctx.Err()
 		case v, ok := <-in:
 			if !ok {
-				p.close()
+				p.close(p.err)
 				return false, p.err
 			}
 			return predicate(v), p.err
@@ -284,15 +284,15 @@ func (p *Pipeline[T]) AllMatch(predicate cutil.Predicate[T]) (bool, error) {
 	for {
 		select {
 		case <-p.ctx.Done():
-			p.close()
+			p.close(p.ctx.Err())
 			return true, p.ctx.Err()
 		case v, ok := <-in:
 			if !ok {
-				p.close()
+				p.close(p.err)
 				return true, p.err
 			}
 			if !predicate(v) {
-				p.close()
+				p.close(p.err)
 				return false, p.err
 			}
 		}
@@ -307,15 +307,15 @@ func (p *Pipeline[T]) NoneMatch(predicate cutil.Predicate[T]) (bool, error) {
 	for {
 		select {
 		case <-p.ctx.Done():
-			p.close()
+			p.close(p.ctx.Err())
 			return true, p.ctx.Err()
 		case v, ok := <-in:
 			if !ok {
-				p.close()
+				p.close(p.err)
 				return true, p.err
 			}
 			if predicate(v) {
-				p.close()
+				p.close(p.err)
 				return false, p.err
 			}
 		}
@@ -331,11 +331,11 @@ func (p *Pipeline[T]) ToArray() ([]T, error) {
 	for {
 		select {
 		case <-p.ctx.Done():
-			p.close()
+			p.close(p.ctx.Err())
 			return array, p.ctx.Err()
 		case v, ok := <-in:
 			if !ok {
-				p.close()
+				p.close(p.err)
 				return array, p.err
 			}
 			array = append(array, v)
@@ -352,11 +352,11 @@ func (p *Pipeline[T]) Count() (int, error) {
 	for {
 		select {
 		case <-p.ctx.Done():
-			p.close()
+			p.close(p.ctx.Err())
 			return count, p.ctx.Err()
 		case _, ok := <-in:
 			if !ok {
-				p.close()
+				p.close(p.err)
 				return count, p.err
 			}
 			count++
@@ -374,11 +374,11 @@ func (p *Pipeline[T]) Min(comparator cutil.Comparator[T]) (T, error) {
 	for {
 		select {
 		case <-p.ctx.Done():
-			p.close()
+			p.close(p.ctx.Err())
 			return zero, p.ctx.Err()
 		case v, ok := <-in:
 			if !ok {
-				p.close()
+				p.close(p.err)
 				return m, p.err
 			}
 			if comparator(v, m) < 0 {
@@ -398,11 +398,11 @@ func (p *Pipeline[T]) Max(comparator cutil.Comparator[T]) (T, error) {
 	for {
 		select {
 		case <-p.ctx.Done():
-			p.close()
+			p.close(p.ctx.Err())
 			return zero, p.ctx.Err()
 		case v, ok := <-in:
 			if !ok {
-				p.close()
+				p.close(p.err)
 				return m, p.err
 			}
 			if comparator(v, m) > 0 {
@@ -421,11 +421,11 @@ func (p *Pipeline[T]) FindFirst() (T, error) {
 	for {
 		select {
 		case <-p.ctx.Done():
-			p.close()
+			p.close(p.ctx.Err())
 			return m, p.ctx.Err()
 		case v, ok := <-in:
 			if !ok {
-				p.close()
+				p.close(p.err)
 				return m, p.err
 			}
 			return v, p.err
@@ -441,11 +441,11 @@ func (p *Pipeline[T]) FindAny() (T, error) {
 	for {
 		select {
 		case <-p.ctx.Done():
-			p.close()
+			p.close(p.ctx.Err())
 			return m, p.ctx.Err()
 		case v, ok := <-in:
 			if !ok {
-				p.close()
+				p.close(p.err)
 				return m, p.err
 			}
 			return v, p.err
@@ -463,7 +463,7 @@ func (p *Pipeline[T]) Reduce(accumulator cutil.BinaryOperator[T]) (T, error) {
 			return zero, p.ctx.Err()
 		case v, ok := <-in:
 			if !ok {
-				p.close()
+				p.close(p.err)
 				return result, p.err
 			}
 			result = accumulator(result, v)
@@ -481,7 +481,7 @@ func (p *Pipeline[T]) ReduceByDefault(identity T, accumulator cutil.BinaryOperat
 			return zero, p.ctx.Err()
 		case v, ok := <-in:
 			if !ok {
-				p.close()
+				p.close(p.err)
 				return result, p.err
 			}
 			result = accumulator(result, v)
@@ -498,12 +498,16 @@ func (p *Pipeline[T]) IsParallel() bool {
 	return p.parallelGoroutines != 1
 }
 
+func (p *Pipeline[T]) GetParallelGoroutines() int {
+	return p.parallelGoroutines
+}
+
 func (p *Pipeline[T]) Parallel(n int) Stream[T] {
 	if n <= 0 {
-		p.sendErr(errors.New(fmt.Sprintf("parallelism must be positive,but now is %s", strconv.Itoa(n))))
+		p.close(errors.New(fmt.Sprintf("parallelism must be positive,but now is %s", strconv.Itoa(n))))
 	}
 	if p.hasOperations {
-		p.sendErr(errors.New("parallel operation must be the first operation"))
+		p.close(errors.New("parallel operation must be the first operation"))
 	}
 	p.hasOperations = true
 	p.parallelGoroutines = n
@@ -519,7 +523,7 @@ func (p *Pipeline[T]) getCtx() context.Context {
 // initOp 初始化中间操作
 func (p *Pipeline[T]) initOp() (chan T, chan T) {
 	if p.linkedOrConsumed {
-		p.sendErr(errors.New("stream already operated upon or closed"))
+		p.close(errors.New("stream already operated upon or closed"))
 	}
 	p.hasOperations = true
 	in, ok := <-p.out
@@ -534,7 +538,7 @@ func (p *Pipeline[T]) initOp() (chan T, chan T) {
 // initTerminalOp 初始化终端操作
 func (p *Pipeline[T]) initTerminalOp() chan T {
 	if p.linkedOrConsumed {
-		p.sendErr(errors.New("stream already operated upon or closed"))
+		p.close(errors.New("stream already operated upon or closed"))
 	}
 	p.hasOperations = true
 	in, ok := <-p.out
@@ -550,17 +554,16 @@ func (p *Pipeline[T]) closeChan() chan T {
 	return ch
 }
 
-func (p *Pipeline[T]) close() {
-	p.linkedOrConsumed = true
-	p.cancel()  // 取消所有操作
-	p.wg.Wait() // 等待所有协程结束
-
-	close(p.out)
-}
-
-func (p *Pipeline[T]) sendErr(err error) {
-	p.errOnce.Do(func() {
-		p.err = err
-		p.close()
-	})
+func (p *Pipeline[T]) close(err error) {
+	go func() {
+		p.closeOnce.Do(func() {
+			if err != nil {
+				p.err = err
+				p.linkedOrConsumed = true
+				p.cancel()  // 取消所有操作
+				p.wg.Wait() // 等待所有协程结束
+				close(p.out)
+			}
+		})
+	}()
 }
