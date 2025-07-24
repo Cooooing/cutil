@@ -5,11 +5,11 @@ import (
 	"cutil"
 	"errors"
 	"reflect"
+	"strconv"
 	"testing"
 	"time"
 )
 
-// TestOf 测试 Of 方法，创建有限流
 func TestOf(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
@@ -37,7 +37,275 @@ func TestOf(t *testing.T) {
 	}
 }
 
-// TestMap 测试 Map 方法
+func TestOfChan(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name      string
+		inputFunc func() chan int
+		expected  []int
+	}{
+		{
+			name: "empty stream",
+			inputFunc: func() chan int {
+				ch := make(chan int)
+				close(ch)
+				return ch
+			},
+			expected: []int{},
+		},
+		{
+			name: "single element",
+			inputFunc: func() chan int {
+				ch := make(chan int)
+				go func() {
+					defer close(ch)
+					ch <- 1
+				}()
+				return ch
+			},
+			expected: []int{1},
+		},
+		{
+			name: "multiple elements",
+			inputFunc: func() chan int {
+				ch := make(chan int)
+				go func() {
+					defer close(ch)
+					ch <- 1
+					ch <- 2
+					ch <- 3
+				}()
+				return ch
+			},
+			expected: []int{1, 2, 3},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := context.Background()
+			stream := OfChan(ctx, tt.inputFunc())
+			result, err := stream.ToArray()
+			if err != nil {
+				t.Errorf("Of() error = %v, want nil", err)
+			}
+			if !reflect.DeepEqual(result, tt.expected) {
+				t.Errorf("Of() = %v, want %v", result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestGenerate(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name     string
+		count    int
+		input    cutil.Supplier[int]
+		expected []int
+	}{
+		{name: "generate numbers", count: 3, input: func() int { return 1 }, expected: []int{1, 1, 1}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := context.Background()
+			stream := Generate(ctx, tt.input).Limit(tt.count)
+			result, err := stream.ToArray()
+			if err != nil {
+				t.Errorf("Generate() error = %v, want nil", err)
+			}
+			if !reflect.DeepEqual(result, tt.expected) {
+				t.Errorf("Generate() = %v, want %v", result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestConcat(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name     string
+		input    []Stream[int]
+		expected []int
+	}{
+		{name: "concat empty stream", input: []Stream[int]{Empty[int](context.Background())}, expected: []int{}},
+		{name: "concat one stream", input: []Stream[int]{Of(context.Background(), 1, 2)}, expected: []int{1, 2}},
+		{name: "concat two streams", input: []Stream[int]{Of(context.Background(), 1, 2), Of(context.Background(), 3, 4)}, expected: []int{1, 2, 3, 4}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := context.Background()
+			stream := Concat(ctx, tt.input...)
+			result, err := stream.ToArray()
+			if err != nil {
+				t.Errorf("Concat() error = %v, want nil", err)
+			}
+			if !reflect.DeepEqual(result, tt.expected) {
+				t.Errorf("Concat() = %v, want %v", result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestEmpty(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name     string
+		expected []int
+	}{
+		{name: "empty stream", expected: []int{}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := context.Background()
+			stream := Empty[int](ctx)
+			result, err := stream.ToArray()
+			if err != nil {
+				t.Errorf("Empty() error = %v, want nil", err)
+			}
+			if !reflect.DeepEqual(result, tt.expected) {
+				t.Errorf("Empty() = %v, want %v", result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestMapToAnotherStream(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name     string
+		input    []int
+		mapper   func(int) string
+		expected []string
+	}{
+		{name: "empty stream", input: []int{}, mapper: func(x int) string { return strconv.Itoa(x * 2) }, expected: []string{}},
+		{name: "double elements", input: []int{1, 2, 3}, mapper: func(x int) string { return strconv.Itoa(x * 2) }, expected: []string{"2", "4", "6"}},
+		{name: "add one", input: []int{1, 2, 3}, mapper: func(x int) string { return strconv.Itoa(x + 1) }, expected: []string{"2", "3", "4"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := context.Background()
+			stream := Of(ctx, tt.input...)
+			result, err := Map[int, string](stream, tt.mapper).ToArray()
+			if err != nil {
+				t.Errorf("MapToAnotherStream() error = %v, want nil", err)
+			}
+			if !reflect.DeepEqual(result, tt.expected) {
+				t.Errorf("MapToAnotherStream() = %v, want %v", result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestFlatMapToAnotherStream(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name     string
+		input    []string
+		mapper   func(string) Stream[int]
+		expected []int
+	}{
+		{name: "empty stream", input: []string{},
+			mapper: func(x string) Stream[int] {
+				var result []int
+				for _, c := range x {
+					result = append(result, int(c))
+				}
+				return Of[int](context.Background(), result...)
+			},
+			expected: []int{},
+		},
+		{name: "word to ascii value of char", input: []string{"hello", "golang"},
+			mapper: func(x string) Stream[int] {
+				var result []int
+				for _, c := range x {
+					result = append(result, int(c))
+				}
+				return Of[int](context.Background(), result...)
+			},
+			expected: []int{104, 101, 108, 108, 111, 103, 111, 108, 97, 110, 103},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := context.Background()
+			stream := Of(ctx, tt.input...)
+			result, err := FlatMap[string, int](stream, tt.mapper).ToArray()
+			if err != nil {
+				t.Errorf("MapToAnotherStream() error = %v, want nil", err)
+			}
+			if !reflect.DeepEqual(result, tt.expected) {
+				t.Errorf("MapToAnotherStream() = %v, want %v", result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestReduceToAnotherType(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name     string
+		input    []string
+		identity int
+		mapper   func(string, int) int
+		combiner func(int, int) int
+		expected int
+	}{
+		{name: "empty stream", input: []string{}, identity: 0,
+			mapper:   func(s string, i int) int { return i + len(s) },
+			combiner: func(a int, b int) int { return a + b },
+			expected: 0,
+		},
+		{name: "calculate the sum of word lengths", input: []string{"hello", "golang"}, identity: 0,
+			mapper:   func(s string, i int) int { return i + len(s) },
+			combiner: func(a int, b int) int { return a + b },
+			expected: 11,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := context.Background()
+			stream := Of(ctx, tt.input...)
+			result, err := Reduce[string, int](stream, tt.identity, tt.mapper, tt.combiner)
+			if err != nil {
+				t.Errorf("ReduceToAnotherType() error = %v, want nil", err)
+			}
+			if !reflect.DeepEqual(result, tt.expected) {
+				t.Errorf("ReduceToAnotherType() = %v, want %v", result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestGroupBy(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name       string
+		input      []string
+		classifier func(string) string
+		expected   map[string][]string
+	}{
+		{name: "empty stream", input: []string{}, classifier: func(s string) string { return s[0:1] }, expected: map[string][]string{}},
+		{name: "group by first char", input: []string{"hello", "golang", "hi", "gopher"}, classifier: func(s string) string { return s[0:1] }, expected: map[string][]string{"h": {"hello", "hi"}, "g": {"golang", "gopher"}}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := context.Background()
+			stream := Of(ctx, tt.input...)
+			result, err := GroupBy[string, string](stream, tt.classifier)
+			if err != nil {
+				t.Errorf("GroupBy() error = %v, want nil", err)
+			}
+			if !reflect.DeepEqual(result, tt.expected) {
+				t.Errorf("GroupBy() = %v, want %v", result, tt.expected)
+			}
+		})
+	}
+
+}
+
+// --------
+
 func TestMap(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
@@ -46,9 +314,9 @@ func TestMap(t *testing.T) {
 		mapper   cutil.UnaryOperator[int]
 		expected []int
 	}{
+		{name: "empty stream", input: []int{}, mapper: func(x int) int { return x * 2 }, expected: []int{}},
 		{name: "double elements", input: []int{1, 2, 3}, mapper: func(x int) int { return x * 2 }, expected: []int{2, 4, 6}},
 		{name: "add one", input: []int{1, 2, 3}, mapper: func(x int) int { return x + 1 }, expected: []int{2, 3, 4}},
-		{name: "empty stream", input: []int{}, mapper: func(x int) int { return x * 2 }, expected: []int{}},
 	}
 
 	for _, tt := range tests {
@@ -66,7 +334,6 @@ func TestMap(t *testing.T) {
 	}
 }
 
-// TestFilter 测试 Filter 方法
 func TestFilter(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
@@ -75,9 +342,9 @@ func TestFilter(t *testing.T) {
 		predicate cutil.Predicate[int]
 		expected  []int
 	}{
+		{name: "empty stream", input: []int{}, predicate: func(x int) bool { return x%2 == 0 }, expected: []int{}},
 		{name: "even numbers", input: []int{1, 2, 3, 4}, predicate: func(x int) bool { return x%2 == 0 }, expected: []int{2, 4}},
 		{name: "greater than 2", input: []int{1, 2, 3, 4}, predicate: func(x int) bool { return x > 2 }, expected: []int{3, 4}},
-		{name: "empty stream", input: []int{}, predicate: func(x int) bool { return x%2 == 0 }, expected: []int{}},
 	}
 
 	for _, tt := range tests {
@@ -104,6 +371,7 @@ func TestSkip(t *testing.T) {
 		n        int
 		expected []int
 	}{
+		{name: "empty stream", input: []int{}, expected: []int{}},
 		{name: "skip 2", input: []int{1, 2, 3, 4}, n: 2, expected: []int{3, 4}},
 		{name: "skip all", input: []int{1, 2}, n: 3, expected: []int{}},
 		{name: "skip zero", input: []int{1, 2, 3}, n: 0, expected: []int{1, 2, 3}},
@@ -133,9 +401,12 @@ func TestLimit(t *testing.T) {
 		maxSize  int
 		expected []int
 	}{
+		{name: "empty stream", input: []int{}, expected: []int{}},
 		{name: "limit 2", input: []int{1, 2, 3, 4}, maxSize: 2, expected: []int{1, 2}},
 		{name: "limit exceed", input: []int{1, 2}, maxSize: 3, expected: []int{1, 2}},
 		{name: "limit zero", input: []int{1, 2, 3}, maxSize: 0, expected: []int{}},
+		{name: "limit negative", input: []int{1, 2, 3}, maxSize: -1, expected: []int{}},
+		{name: "limit all", input: []int{1, 2, 3, 4}, maxSize: 4, expected: []int{1, 2, 3, 4}},
 	}
 
 	for _, tt := range tests {
@@ -161,9 +432,9 @@ func TestDistinct(t *testing.T) {
 		input    []int
 		expected []int
 	}{
+		{name: "empty stream", input: []int{}, expected: []int{}},
 		{name: "remove duplicates", input: []int{1, 2, 2, 3, 1}, expected: []int{1, 2, 3}},
 		{name: "no duplicates", input: []int{1, 2, 3}, expected: []int{1, 2, 3}},
-		{name: "empty stream", input: []int{}, expected: []int{}},
 	}
 
 	for _, tt := range tests {
@@ -190,9 +461,9 @@ func TestSorted(t *testing.T) {
 		comparator cutil.Comparator[int]
 		expected   []int
 	}{
+		{name: "empty stream", input: []int{}, comparator: func(a, b int) int { return a - b }, expected: []int{}},
 		{name: "ascending order", input: []int{3, 1, 2}, comparator: func(a, b int) int { return a - b }, expected: []int{1, 2, 3}},
 		{name: "descending order", input: []int{3, 1, 2}, comparator: func(a, b int) int { return b - a }, expected: []int{3, 2, 1}},
-		{name: "empty stream", input: []int{}, comparator: func(a, b int) int { return a - b }, expected: []int{}},
 	}
 
 	for _, tt := range tests {
@@ -219,8 +490,8 @@ func TestForEach(t *testing.T) {
 		consumer cutil.Consumer[int]
 		expected []int
 	}{
-		{name: "collect elements", input: []int{1, 2, 3}, consumer: func(x int) {}, expected: []int{1, 2, 3}},
 		{name: "empty stream", input: []int{}, consumer: func(x int) {}, expected: []int{}},
+		{name: "collect elements", input: []int{1, 2, 3}, consumer: func(x int) {}, expected: []int{1, 2, 3}},
 	}
 
 	for _, tt := range tests {
@@ -248,8 +519,8 @@ func TestCount(t *testing.T) {
 		input    []int
 		expected int
 	}{
-		{name: "three elements", input: []int{1, 2, 3}, expected: 3},
 		{name: "empty stream", input: []int{}, expected: 0},
+		{name: "three elements", input: []int{1, 2, 3}, expected: 3},
 		{name: "single element", input: []int{1}, expected: 1},
 	}
 

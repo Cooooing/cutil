@@ -3,6 +3,7 @@ package stream
 import (
 	"context"
 	"cutil"
+	"sync"
 )
 
 type Stream[T any] interface {
@@ -75,6 +76,9 @@ type Stream[T any] interface {
 
 // Of 从指定元素创建一个流（有限流）
 func Of[T any](ctx context.Context, values ...T) Stream[T] {
+	if len(values) == 0 {
+		return Empty[T](ctx) // 创建一个空流
+	}
 	p := newPipeline[T](ctx)
 	out := make(chan T, len(values)) // 使用缓冲通道优化性能
 	p.out <- out
@@ -98,15 +102,21 @@ func OfChan[T any](ctx context.Context, ins ...chan T) Stream[T] {
 	p.out <- out
 	go func() {
 		defer close(out)
+		var wg sync.WaitGroup
 		for _, in := range ins {
-			for v := range in {
-				select {
-				case <-p.ctx.Done():
-					return
-				case out <- v:
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				for v := range in {
+					select {
+					case <-p.ctx.Done():
+						return
+					case out <- v:
+					}
 				}
-			}
+			}()
 		}
+		wg.Wait()
 	}()
 	return p
 }
@@ -132,7 +142,7 @@ func Generate[T any](ctx context.Context, s cutil.Supplier[T]) Stream[T] {
 // Concat 返回一个流，该流由给定的多个流中的所有元素组成。
 func Concat[T any](ctx context.Context, streams ...Stream[T]) Stream[T] {
 	if len(streams) == 0 {
-		return Of[T](ctx) // 返回空流
+		return Empty[T](ctx) // 返回空流
 	}
 	p := newPipeline[T](ctx)
 	out := make(chan T, 1)
@@ -190,9 +200,6 @@ func FlatMap[T any, R any](stream Stream[T], mapper cutil.Function[T, Stream[R]]
 		defer close(out)
 		for v := range in {
 			mappedStream := mapper(v)
-			if &mappedStream == nil {
-				continue // 空流处理
-			}
 			for mappedValue := range mappedStream.Iterator() {
 				select {
 				case <-p.ctx.Done():
@@ -203,4 +210,57 @@ func FlatMap[T any, R any](stream Stream[T], mapper cutil.Function[T, Stream[R]]
 		}
 	}()
 	return p
+}
+
+// Reduce 将流中的元素通过累积函数聚合为单一结果。
+// identity: 归约的初始值，即使流为空也返回此值。
+// accumulator: 累积函数，定义如何将流元素与中间结果合并。
+// combiner: 合并函数，定义如何合并并行流中的子结果。
+func Reduce[T any, R any](stream Stream[T], identity R, accumulator cutil.BiFunction[T, R], combiner cutil.BinaryOperator[R]) (R, error) {
+	var err error
+	result := identity
+	if stream.IsParallel() {
+		// 并行流逻辑
+		subResults := make(chan R, stream.GetParallelGoroutines()) // 用于收集各子流的归约结果
+		iterator := stream.Iterator()
+		var currentWg sync.WaitGroup
+		currentWg.Add(stream.GetParallelGoroutines())
+		go func() {
+			currentWg.Wait()
+			stream.close(nil)
+			close(subResults)
+		}()
+		for i := 0; i < stream.GetParallelGoroutines(); i++ {
+			go func() {
+				defer currentWg.Done()
+				var localResult R
+				for v := range iterator {
+					localResult = accumulator(v, localResult)
+				}
+				subResults <- localResult
+			}()
+		}
+		finalResult := identity
+		for r := range subResults {
+			finalResult = combiner(finalResult, r)
+		}
+		return finalResult, nil
+	} else {
+		// 顺序流逻辑
+		err = stream.ForEach(func(item T) {
+			result = accumulator(item, result)
+		})
+	}
+	return result, err
+}
+
+// GroupBy 将流中的元素根据给定分类函数进行分组，并返回一个map，该map的键是分类函数的返回值，值是包含该键的元素组成的列表。
+func GroupBy[T any, K comparable](stream Stream[T], classifier cutil.Function[T, K]) (map[K][]T, error) {
+	var err error
+	result := make(map[K][]T)
+	err = stream.ForEach(func(item T) {
+		key := classifier(item)
+		result[key] = append(result[key], item)
+	})
+	return result, err
 }
