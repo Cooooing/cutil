@@ -1,4 +1,4 @@
-package cutil
+package common
 
 type (
 	Function[T any, R any]   func(T) R

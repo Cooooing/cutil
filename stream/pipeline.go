@@ -1,8 +1,8 @@
 package stream
 
 import (
+	"common"
 	"context"
-	"cutil"
 	"errors"
 	"fmt"
 	"sort"
@@ -36,7 +36,7 @@ func newPipeline[T any](ctx context.Context) *Pipeline[T] {
 
 // 中间操作
 
-func (p *Pipeline[T]) Map(action cutil.UnaryOperator[T]) Stream[T] {
+func (p *Pipeline[T]) Map(action common.UnaryOperator[T]) Stream[T] {
 	in, out := p.initOp()
 	p.wg.Add(p.parallelGoroutines)
 	var currentWg sync.WaitGroup
@@ -66,7 +66,7 @@ func (p *Pipeline[T]) Map(action cutil.UnaryOperator[T]) Stream[T] {
 	return p
 }
 
-func (p *Pipeline[T]) Peek(action cutil.Consumer[T]) Stream[T] {
+func (p *Pipeline[T]) Peek(action common.Consumer[T]) Stream[T] {
 	in, out := p.initOp()
 	p.wg.Add(p.parallelGoroutines)
 	var currentWg sync.WaitGroup
@@ -93,7 +93,7 @@ func (p *Pipeline[T]) Peek(action cutil.Consumer[T]) Stream[T] {
 	return p
 }
 
-func (p *Pipeline[T]) Filter(predicate cutil.Predicate[T]) Stream[T] {
+func (p *Pipeline[T]) Filter(predicate common.Predicate[T]) Stream[T] {
 	in, out := p.initOp()
 	p.wg.Add(p.parallelGoroutines)
 	var currentWg sync.WaitGroup
@@ -189,7 +189,7 @@ func (p *Pipeline[T]) Distinct() Stream[T] {
 }
 
 // Sorted 排序操作
-func (p *Pipeline[T]) Sorted(comparator cutil.Comparator[T]) Stream[T] {
+func (p *Pipeline[T]) Sorted(comparator common.Comparator[T]) Stream[T] {
 	in, out := p.initOp()
 	p.wg.Add(1)
 	go func() {
@@ -231,7 +231,7 @@ func (p *Pipeline[T]) Sorted(comparator cutil.Comparator[T]) Stream[T] {
 
 // 终止操作
 
-func (p *Pipeline[T]) ForEach(action cutil.Consumer[T]) error {
+func (p *Pipeline[T]) ForEach(action common.Consumer[T]) error {
 	in := p.initTerminalOp()
 	if p.err != nil {
 		return p.err
@@ -251,12 +251,12 @@ func (p *Pipeline[T]) ForEach(action cutil.Consumer[T]) error {
 	}
 }
 
-func (p *Pipeline[T]) ForEachOrdered(comparator cutil.Comparator[T], action cutil.Consumer[T]) error {
+func (p *Pipeline[T]) ForEachOrdered(comparator common.Comparator[T], action common.Consumer[T]) error {
 	p.Sorted(comparator)
 	return p.ForEach(action)
 }
 
-func (p *Pipeline[T]) AnyMatch(predicate cutil.Predicate[T]) (bool, error) {
+func (p *Pipeline[T]) AnyMatch(predicate common.Predicate[T]) (bool, error) {
 	in := p.initTerminalOp()
 	if p.err != nil {
 		return false, p.err
@@ -276,7 +276,7 @@ func (p *Pipeline[T]) AnyMatch(predicate cutil.Predicate[T]) (bool, error) {
 	}
 }
 
-func (p *Pipeline[T]) AllMatch(predicate cutil.Predicate[T]) (bool, error) {
+func (p *Pipeline[T]) AllMatch(predicate common.Predicate[T]) (bool, error) {
 	in := p.initTerminalOp()
 	if p.err != nil {
 		return false, p.err
@@ -299,7 +299,7 @@ func (p *Pipeline[T]) AllMatch(predicate cutil.Predicate[T]) (bool, error) {
 	}
 }
 
-func (p *Pipeline[T]) NoneMatch(predicate cutil.Predicate[T]) (bool, error) {
+func (p *Pipeline[T]) NoneMatch(predicate common.Predicate[T]) (bool, error) {
 	in := p.initTerminalOp()
 	if p.err != nil {
 		return false, p.err
@@ -364,7 +364,7 @@ func (p *Pipeline[T]) Count() (int, error) {
 	}
 }
 
-func (p *Pipeline[T]) Min(comparator cutil.Comparator[T]) (T, error) {
+func (p *Pipeline[T]) Min(comparator common.Comparator[T]) (T, error) {
 	in := p.initTerminalOp()
 	var zero T
 	if p.err != nil {
@@ -388,7 +388,7 @@ func (p *Pipeline[T]) Min(comparator cutil.Comparator[T]) (T, error) {
 	}
 }
 
-func (p *Pipeline[T]) Max(comparator cutil.Comparator[T]) (T, error) {
+func (p *Pipeline[T]) Max(comparator common.Comparator[T]) (T, error) {
 	in := p.initTerminalOp()
 	var zero T
 	if p.err != nil {
@@ -453,7 +453,7 @@ func (p *Pipeline[T]) FindAny() (T, error) {
 	}
 }
 
-func (p *Pipeline[T]) Reduce(accumulator cutil.BinaryOperator[T]) (T, error) {
+func (p *Pipeline[T]) Reduce(accumulator common.BinaryOperator[T]) (T, error) {
 	in := p.initTerminalOp()
 	var result T
 	for {
@@ -471,7 +471,7 @@ func (p *Pipeline[T]) Reduce(accumulator cutil.BinaryOperator[T]) (T, error) {
 	}
 }
 
-func (p *Pipeline[T]) ReduceByDefault(identity T, accumulator cutil.BinaryOperator[T]) (T, error) {
+func (p *Pipeline[T]) ReduceByDefault(identity T, accumulator common.BinaryOperator[T]) (T, error) {
 	in := p.initTerminalOp()
 	result := identity
 	for {

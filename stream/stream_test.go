@@ -1,8 +1,8 @@
 package stream
 
 import (
+	"common"
 	"context"
-	"cutil"
 	"errors"
 	"reflect"
 	"strconv"
@@ -101,7 +101,7 @@ func TestGenerate(t *testing.T) {
 	tests := []struct {
 		name     string
 		count    int
-		input    cutil.Supplier[int]
+		input    common.Supplier[int]
 		expected []int
 	}{
 		{name: "generate numbers", count: 3, input: func() int { return 1 }, expected: []int{1, 1, 1}},
@@ -311,7 +311,7 @@ func TestMap(t *testing.T) {
 	tests := []struct {
 		name     string
 		input    []int
-		mapper   cutil.UnaryOperator[int]
+		mapper   common.UnaryOperator[int]
 		expected []int
 	}{
 		{name: "empty stream", input: []int{}, mapper: func(x int) int { return x * 2 }, expected: []int{}},
@@ -339,7 +339,7 @@ func TestFilter(t *testing.T) {
 	tests := []struct {
 		name      string
 		input     []int
-		predicate cutil.Predicate[int]
+		predicate common.Predicate[int]
 		expected  []int
 	}{
 		{name: "empty stream", input: []int{}, predicate: func(x int) bool { return x%2 == 0 }, expected: []int{}},
@@ -458,7 +458,7 @@ func TestSorted(t *testing.T) {
 	tests := []struct {
 		name       string
 		input      []int
-		comparator cutil.Comparator[int]
+		comparator common.Comparator[int]
 		expected   []int
 	}{
 		{name: "empty stream", input: []int{}, comparator: func(a, b int) int { return a - b }, expected: []int{}},
@@ -487,7 +487,7 @@ func TestForEach(t *testing.T) {
 	tests := []struct {
 		name     string
 		input    []int
-		consumer cutil.Consumer[int]
+		consumer common.Consumer[int]
 		expected []int
 	}{
 		{name: "empty stream", input: []int{}, consumer: func(x int) {}, expected: []int{}},

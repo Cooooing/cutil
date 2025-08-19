@@ -1,4 +1,4 @@
-package cutil
+package common
 
 // Signed 有符号类型
 type Signed interface {
