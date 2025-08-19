@@ -1,9 +1,9 @@
 package stream
 
 import (
-	"common"
 	"context"
 	"errors"
+	"github.com/Cooooing/cutil/common"
 	"reflect"
 	"strconv"
 	"testing"

@@ -1,8 +1,8 @@
 package stream
 
 import (
-	"common"
 	"context"
+	"github.com/Cooooing/cutil/common"
 	"sync"
 )
 
