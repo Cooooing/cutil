@@ -1,4 +1,4 @@
-module common
+module github.com/Cooooing/cutil/common
 
 go 1.24
 
