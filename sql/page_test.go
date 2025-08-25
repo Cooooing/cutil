@@ -11,9 +11,9 @@ import (
 	_ "github.com/lib/pq"
 )
 
-const query = `select * from "user" order by id`
+const query = `select * from "user" where id = $1 order by id`
 
-var args = []any{}
+var args = []any{1}
 
 var db *sql.DB
 
@@ -24,7 +24,7 @@ type User struct {
 	CreateTime *time.Time `json:"create_time"`
 }
 
-func init() {
+func Init() {
 	var err error
 	db, err = sql.Open("postgres", "host=127.0.0.1 user=root password=123456 dbname=public port=5432 sslmode=disable TimeZone=Asia/Shanghai")
 	if err != nil {
@@ -38,7 +38,8 @@ func init() {
 }
 
 func TestPageQueryForStruct(t *testing.T) {
-	res, err := PageQueryForStruct[User](db, PageReq{Page: 1, Size: 100}, query, args...)
+	Init()
+	res, err := PageQueryForStruct[User](db, nil, query, args...)
 	if err != nil {
 		t.Error(err)
 	}
@@ -47,7 +48,8 @@ func TestPageQueryForStruct(t *testing.T) {
 }
 
 func TestPageQueryForMap(t *testing.T) {
-	res, err := PageQueryForMap(db, PageReq{Page: 1, Size: 100}, query, args...)
+	Init()
+	res, err := PageQueryForMap(db, &PageReq{Page: 1, Size: 100}, query, args...)
 	if err != nil {
 		t.Error(err)
 	}
@@ -56,7 +58,8 @@ func TestPageQueryForMap(t *testing.T) {
 }
 
 func TestPageQueryForStructWithLimitOffset(t *testing.T) {
-	res, err := PageQueryForStructWithLimitOffset[User](db, PageReq{Page: 1, Size: 100}, query, args...)
+	Init()
+	res, err := PageQueryForStructWithLimitOffset[User](db, &PageReq{Page: 1, Size: 100}, query, args...)
 	if err != nil {
 		t.Error(err)
 	}
@@ -65,7 +68,8 @@ func TestPageQueryForStructWithLimitOffset(t *testing.T) {
 }
 
 func TestPageQueryForMapWithLimitOffset(t *testing.T) {
-	res, err := PageQueryForMapWithLimitOffset(db, PageReq{Page: 1, Size: 100}, query, args...)
+	Init()
+	res, err := PageQueryForMapWithLimitOffset(db, &PageReq{Page: 1, Size: 100}, query, args...)
 	if err != nil {
 		t.Error(err)
 	}
@@ -74,7 +78,8 @@ func TestPageQueryForMapWithLimitOffset(t *testing.T) {
 }
 
 func TestPageQueryForStructWithRowNumber(t *testing.T) {
-	res, err := PageQueryForStructWithRowNumber[User](db, PageReq{Page: 1, Size: 100}, query, args...)
+	Init()
+	res, err := PageQueryForStructWithRowNumber[User](db, &PageReq{Page: 1, Size: 100}, query, args...)
 	if err != nil {
 		t.Error(err)
 	}
@@ -83,7 +88,8 @@ func TestPageQueryForStructWithRowNumber(t *testing.T) {
 }
 
 func TestPageQueryForMapWithRowNumber(t *testing.T) {
-	res, err := PageQueryForMapWithRowNumber(db, PageReq{Page: 1, Size: 100}, query, args...)
+	Init()
+	res, err := PageQueryForMapWithRowNumber(db, &PageReq{Page: 1, Size: 100}, query, args...)
 	if err != nil {
 		t.Error(err)
 	}
@@ -92,7 +98,8 @@ func TestPageQueryForMapWithRowNumber(t *testing.T) {
 }
 
 func TestPageQueryForStructWithFetchOffset(t *testing.T) {
-	res, err := PageQueryForStructWithFetchOffset[User](db, PageReq{Page: 1, Size: 100}, query, args...)
+	Init()
+	res, err := PageQueryForStructWithFetchOffset[User](db, &PageReq{Page: 1, Size: 100}, query, args...)
 	if err != nil {
 		t.Error(err)
 	}
@@ -101,7 +108,8 @@ func TestPageQueryForStructWithFetchOffset(t *testing.T) {
 }
 
 func TestPageQueryForMapWithFetchOffset(t *testing.T) {
-	res, err := PageQueryForMapWithFetchOffset(db, PageReq{Page: 1, Size: 100}, query, args...)
+	Init()
+	res, err := PageQueryForMapWithFetchOffset(db, &PageReq{Page: 1, Size: 100}, query, args...)
 	if err != nil {
 		t.Error(err)
 	}
@@ -110,7 +118,8 @@ func TestPageQueryForMapWithFetchOffset(t *testing.T) {
 }
 
 func TestPageQueryForStructWithDeclareCursor(t *testing.T) {
-	res, err := PageQueryForStructWithDeclareCursor[User](db, PageReq{Page: 1, Size: 100}, query, args...)
+	Init()
+	res, err := PageQueryForStructWithDeclareCursor[User](db, &PageReq{Page: 1, Size: 100}, query, args...)
 	if err != nil {
 		t.Error(err)
 	}
@@ -119,7 +128,8 @@ func TestPageQueryForStructWithDeclareCursor(t *testing.T) {
 }
 
 func TestPageQueryForMapWithDeclareCursor(t *testing.T) {
-	res, err := PageQueryForMapWithDeclareCursor(db, PageReq{Page: 1, Size: 100}, query, args...)
+	Init()
+	res, err := PageQueryForMapWithDeclareCursor(db, &PageReq{Page: 1, Size: 100}, query, args...)
 	if err != nil {
 		t.Error(err)
 	}

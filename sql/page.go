@@ -14,7 +14,7 @@ type PageReq struct {
 }
 
 type PageResp[T any] struct {
-	PageReq
+	*PageReq
 	Total int `json:"total"`
 	List  []T `json:"list"`
 }
@@ -61,7 +61,7 @@ func QueryCount(db *sql.DB, query string, args ...any) (int, error) {
 // 返回:
 //   - *PageResp[T]: 分页结果
 //   - error: 校验失败的错误信息
-func PageQueryForStruct[T any](db *sql.DB, page PageReq, query string, args ...any) (*PageResp[T], error) {
+func PageQueryForStruct[T any](db *sql.DB, page *PageReq, query string, args ...any) (*PageResp[T], error) {
 	var err error
 	page.Validate()
 	pageResp := &PageResp[T]{PageReq: page}
@@ -87,7 +87,7 @@ func PageQueryForStruct[T any](db *sql.DB, page PageReq, query string, args ...a
 // 返回:
 //   - *PageResp[map[string]any]: 分页结果
 //   - error: 校验失败的错误信息
-func PageQueryForMap(db *sql.DB, page PageReq, query string, args ...any) (*PageResp[map[string]any], error) {
+func PageQueryForMap(db *sql.DB, page *PageReq, query string, args ...any) (*PageResp[map[string]any], error) {
 	var err error
 	page.Validate()
 	pageResp := &PageResp[map[string]any]{PageReq: page}
@@ -102,9 +102,8 @@ func PageQueryForMap(db *sql.DB, page PageReq, query string, args ...any) (*Page
 	return pageResp, nil
 }
 
-func pageQueryForStruct[T any](db *sql.DB, page PageReq, countQuery string, query string, args ...any) (*PageResp[T], error) {
+func pageQueryForStruct[T any](db *sql.DB, page *PageReq, countQuery string, query string, args ...any) (*PageResp[T], error) {
 	var err error
-	page.Validate()
 	pageResp := &PageResp[T]{PageReq: page}
 	pageResp.Total, err = QueryCount(db, countQuery, args...)
 	if err != nil {
@@ -117,9 +116,8 @@ func pageQueryForStruct[T any](db *sql.DB, page PageReq, countQuery string, quer
 	return pageResp, nil
 }
 
-func pageQueryForMap(db *sql.DB, page PageReq, countQuery string, query string, args ...any) (*PageResp[map[string]any], error) {
+func pageQueryForMap(db *sql.DB, page *PageReq, countQuery string, query string, args ...any) (*PageResp[map[string]any], error) {
 	var err error
-	page.Validate()
 	pageResp := &PageResp[map[string]any]{PageReq: page}
 	pageResp.Total, err = QueryCount(db, countQuery, args...)
 	if err != nil {
@@ -143,7 +141,8 @@ func pageQueryForMap(db *sql.DB, page PageReq, countQuery string, query string, 
 // 返回:
 //   - *PageResp[T]: 分页结果
 //   - error: 校验失败的错误信息
-func PageQueryForStructWithLimitOffset[T any](db *sql.DB, page PageReq, query string, args ...any) (*PageResp[T], error) {
+func PageQueryForStructWithLimitOffset[T any](db *sql.DB, page *PageReq, query string, args ...any) (*PageResp[T], error) {
+	page.Validate()
 	return pageQueryForStruct[T](db, page, query, getLimitOffsetQuery(page, query), args...)
 }
 
@@ -158,11 +157,12 @@ func PageQueryForStructWithLimitOffset[T any](db *sql.DB, page PageReq, query st
 // 返回:
 //   - *PageResp[map[string]any]: 分页结果
 //   - error: 校验失败的错误信息
-func PageQueryForMapWithLimitOffset(db *sql.DB, page PageReq, query string, args ...any) (*PageResp[map[string]any], error) {
+func PageQueryForMapWithLimitOffset(db *sql.DB, page *PageReq, query string, args ...any) (*PageResp[map[string]any], error) {
+	page.Validate()
 	return pageQueryForMap(db, page, query, getLimitOffsetQuery(page, query), args...)
 }
 
-func getLimitOffsetQuery(page PageReq, query string) string {
+func getLimitOffsetQuery(page *PageReq, query string) string {
 	return fmt.Sprintf(`SELECT t.* FROM (%s) AS t LIMIT %d OFFSET %d`, query, page.Size, (page.Page-1)*page.Size)
 }
 
@@ -177,7 +177,8 @@ func getLimitOffsetQuery(page PageReq, query string) string {
 // 返回:
 //   - *PageResp[T]: 分页结果
 //   - error: 校验失败的错误信息
-func PageQueryForStructWithRowNumber[T any](db *sql.DB, page PageReq, query string, args ...any) (*PageResp[T], error) {
+func PageQueryForStructWithRowNumber[T any](db *sql.DB, page *PageReq, query string, args ...any) (*PageResp[T], error) {
+	page.Validate()
 	return pageQueryForStruct[T](db, page, query, getRowNumberQuery(page, query), args...)
 }
 
@@ -192,11 +193,12 @@ func PageQueryForStructWithRowNumber[T any](db *sql.DB, page PageReq, query stri
 // 返回:
 //   - *PageResp[map[string]any]: 分页结果
 //   - error: 校验失败的错误信息
-func PageQueryForMapWithRowNumber(db *sql.DB, page PageReq, query string, args ...any) (*PageResp[map[string]any], error) {
+func PageQueryForMapWithRowNumber(db *sql.DB, page *PageReq, query string, args ...any) (*PageResp[map[string]any], error) {
+	page.Validate()
 	return pageQueryForMap(db, page, query, getRowNumberQuery(page, query), args...)
 }
 
-func getRowNumberQuery(page PageReq, query string) string {
+func getRowNumberQuery(page *PageReq, query string) string {
 	return fmt.Sprintf(`SELECT * FROM (SELECT t.*, ROW_NUMBER() OVER () AS rn FROM (%s) AS t ) AS sub WHERE rn BETWEEN %d AND %d`, query, (page.Page-1)*page.Size+1, page.Page*page.Size)
 }
 
@@ -211,7 +213,8 @@ func getRowNumberQuery(page PageReq, query string) string {
 // 返回:
 //   - *PageResp[T]: 分页结果
 //   - error: 校验失败的错误信息
-func PageQueryForStructWithFetchOffset[T any](db *sql.DB, page PageReq, query string, args ...any) (*PageResp[T], error) {
+func PageQueryForStructWithFetchOffset[T any](db *sql.DB, page *PageReq, query string, args ...any) (*PageResp[T], error) {
+	page.Validate()
 	return pageQueryForStruct[T](db, page, query, getFetchOffsetQuery(page, query), args...)
 }
 
@@ -226,11 +229,12 @@ func PageQueryForStructWithFetchOffset[T any](db *sql.DB, page PageReq, query st
 // 返回:
 //   - *PageResp[map[string]any]: 分页结果
 //   - error: 校验失败的错误信息
-func PageQueryForMapWithFetchOffset(db *sql.DB, page PageReq, query string, args ...any) (*PageResp[map[string]any], error) {
+func PageQueryForMapWithFetchOffset(db *sql.DB, page *PageReq, query string, args ...any) (*PageResp[map[string]any], error) {
+	page.Validate()
 	return pageQueryForMap(db, page, query, getFetchOffsetQuery(page, query), args...)
 }
 
-func getFetchOffsetQuery(page PageReq, query string) string {
+func getFetchOffsetQuery(page *PageReq, query string) string {
 	return fmt.Sprintf(`SELECT t.* FROM (%s) AS t OFFSET %d ROWS FETCH NEXT %d ROWS ONLY`, query, (page.Page-1)*page.Size, page.Size)
 }
 
@@ -245,7 +249,8 @@ func getFetchOffsetQuery(page PageReq, query string) string {
 // 返回:
 //   - *PageResp[T]: 分页结果
 //   - error: 校验失败的错误信息
-func PageQueryForStructWithDeclareCursor[T any](db *sql.DB, page PageReq, query string, args ...any) (*PageResp[T], error) {
+func PageQueryForStructWithDeclareCursor[T any](db *sql.DB, page *PageReq, query string, args ...any) (*PageResp[T], error) {
+	page.Validate()
 	PageMap, err := PageQueryForMapWithDeclareCursor(db, page, query, args...)
 	if err != nil {
 		return nil, err
@@ -278,7 +283,7 @@ func PageQueryForStructWithDeclareCursor[T any](db *sql.DB, page PageReq, query 
 // 返回:
 //   - *PageResp[map[string]any]: 分页结果
 //   - error: 校验失败的错误信息
-func PageQueryForMapWithDeclareCursor(db *sql.DB, page PageReq, query string, args ...any) (*PageResp[map[string]any], error) {
+func PageQueryForMapWithDeclareCursor(db *sql.DB, page *PageReq, query string, args ...any) (*PageResp[map[string]any], error) {
 	var err error
 	page.Validate()
 	pageResp := &PageResp[map[string]any]{PageReq: page}
@@ -377,7 +382,7 @@ func PageQueryForMapWithDeclareCursor(db *sql.DB, page PageReq, query string, ar
 	return pageResp, nil
 }
 
-func raw2StructByPage[T any](db *sql.DB, page PageReq, query string, args ...any) ([]T, error) {
+func raw2StructByPage[T any](db *sql.DB, page *PageReq, query string, args ...any) ([]T, error) {
 	list, err := raw2MapByPage(db, page, query, args...)
 	if err != nil {
 		return nil, err
@@ -394,7 +399,7 @@ func raw2StructByPage[T any](db *sql.DB, page PageReq, query string, args ...any
 	return result, err
 }
 
-func raw2MapByPage(db *sql.DB, page PageReq, query string, args ...any) ([]map[string]any, error) {
+func raw2MapByPage(db *sql.DB, page *PageReq, query string, args ...any) ([]map[string]any, error) {
 	rows, err := db.Query(query, args...)
 	if err != nil {
 		return nil, err
