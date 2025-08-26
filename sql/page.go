@@ -11,12 +11,6 @@ import (
 
 // ---------------- PageReq ----------------
 
-type PageReqInterface interface {
-	Validate() error
-	GetPage() int
-	GetSize() int
-}
-
 type PageReq struct {
 	Page int `json:"page"`
 	Size int `json:"size"`
@@ -40,16 +34,6 @@ func (p *PageReq) GetSize() int {
 }
 
 // ---------------- PageResp ----------------
-
-type PageRespInterface[T any] interface {
-	SetList(data []T)
-	SetTotal(total int)
-	SetPageReq(pageReq PageReqInterface)
-	GetList() []T
-	GetTotal() int
-	GetPage() int
-	GetSize() int
-}
 
 type PageResp[T any] struct {
 	Page  int `json:"page"`
