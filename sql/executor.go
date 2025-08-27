@@ -55,7 +55,7 @@ func (e *Executor[T]) First() (*T, error) {
 		s, args := e.builder.Build()
 		e.log(s, args...)
 		s = fmt.Sprintf(`SELECT t.* FROM (%s) AS t LIMIT %d`, s, 1)
-		t, err := raw2Struct[T](e.db, s, args...)
+		t, err := base.Raw2Struct[T](e.db, s, args...)
 		if err != nil {
 			return nil, err
 		}
@@ -71,7 +71,7 @@ func (e *Executor[T]) List() ([]T, error) {
 	if _, ok := e.builder.(base.SelectBuilder); ok {
 		s, args := e.builder.Build()
 		e.log(s, args...)
-		return raw2Struct[T](e.db, s, args...)
+		return base.Raw2Struct[T](e.db, s, args...)
 	}
 	return nil, base.ErrorExecutorNotSupportSelect
 }

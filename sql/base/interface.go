@@ -150,20 +150,16 @@ type SelectBuilder interface {
 	FromAlias(table string, alias string) SelectBuilder
 	Columns(columns ...string) SelectBuilder
 
-	InnerJoin(table string, on ConditionBuilder) SelectBuilder
-	InnerJoinAlias(table string, alias string, on ConditionBuilder) SelectBuilder
+	InnerJoin(table string, alias string, on ConditionBuilder) SelectBuilder
 	InnerJoinSelect(builder SelectBuilder, alias string, on ConditionBuilder) SelectBuilder
 
-	FullJoin(table string, on ConditionBuilder) SelectBuilder
-	FullJoinAlias(table string, alias string, on ConditionBuilder) SelectBuilder
+	FullJoin(table string, alias string, on ConditionBuilder) SelectBuilder
 	FullJoinSelect(builder SelectBuilder, alias string, on ConditionBuilder) SelectBuilder
 
-	LeftJoin(table string, on ConditionBuilder) SelectBuilder
-	LeftJoinAlias(table string, alias string, on ConditionBuilder) SelectBuilder
+	LeftJoin(table string, alias string, on ConditionBuilder) SelectBuilder
 	LeftJoinSelect(builder SelectBuilder, alias string, on ConditionBuilder) SelectBuilder
 
-	RightJoin(table string, on ConditionBuilder) SelectBuilder
-	RightJoinAlias(table string, alias string, on ConditionBuilder) SelectBuilder
+	RightJoin(table string, alias string, on ConditionBuilder) SelectBuilder
 	RightJoinSelect(builder SelectBuilder, alias string, on ConditionBuilder) SelectBuilder
 
 	Where(cond ConditionBuilder) SelectBuilder

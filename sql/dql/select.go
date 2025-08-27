@@ -145,12 +145,7 @@ func (s *Select) Columns(columns ...string) base.SelectBuilder {
 	return s
 }
 
-func (s *Select) InnerJoin(table string, on base.ConditionBuilder) base.SelectBuilder {
-	s.joins = append(s.joins, joinNode{"INNER JOIN", table, "", on, nil})
-	return s
-}
-
-func (s *Select) InnerJoinAlias(table string, alias string, on base.ConditionBuilder) base.SelectBuilder {
+func (s *Select) InnerJoin(table string, alias string, on base.ConditionBuilder) base.SelectBuilder {
 	s.joins = append(s.joins, joinNode{"INNER JOIN", table, alias, on, nil})
 	return s
 }
@@ -160,12 +155,7 @@ func (s *Select) InnerJoinSelect(builder base.SelectBuilder, alias string, on ba
 	return s
 }
 
-func (s *Select) FullJoin(table string, on base.ConditionBuilder) base.SelectBuilder {
-	s.joins = append(s.joins, joinNode{"FULL JOIN", table, "", on, nil})
-	return s
-}
-
-func (s *Select) FullJoinAlias(table string, alias string, on base.ConditionBuilder) base.SelectBuilder {
+func (s *Select) FullJoin(table string, alias string, on base.ConditionBuilder) base.SelectBuilder {
 	s.joins = append(s.joins, joinNode{"FULL JOIN", table, alias, on, nil})
 	return s
 }
@@ -175,12 +165,7 @@ func (s *Select) FullJoinSelect(builder base.SelectBuilder, alias string, on bas
 	return s
 }
 
-func (s *Select) LeftJoin(table string, on base.ConditionBuilder) base.SelectBuilder {
-	s.joins = append(s.joins, joinNode{"LEFT JOIN", table, "", on, nil})
-	return s
-}
-
-func (s *Select) LeftJoinAlias(table string, alias string, on base.ConditionBuilder) base.SelectBuilder {
+func (s *Select) LeftJoin(table string, alias string, on base.ConditionBuilder) base.SelectBuilder {
 	s.joins = append(s.joins, joinNode{"LEFT JOIN", table, alias, on, nil})
 	return s
 }
@@ -190,12 +175,7 @@ func (s *Select) LeftJoinSelect(builder base.SelectBuilder, alias string, on bas
 	return s
 }
 
-func (s *Select) RightJoin(table string, on base.ConditionBuilder) base.SelectBuilder {
-	s.joins = append(s.joins, joinNode{"RIGHT JOIN", table, "", on, nil})
-	return s
-}
-
-func (s *Select) RightJoinAlias(table string, alias string, on base.ConditionBuilder) base.SelectBuilder {
+func (s *Select) RightJoin(table string, alias string, on base.ConditionBuilder) base.SelectBuilder {
 	s.joins = append(s.joins, joinNode{"RIGHT JOIN", table, alias, on, nil})
 	return s
 }

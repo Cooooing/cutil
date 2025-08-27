@@ -1,0 +1,154 @@
+package base
+
+import (
+	"database/sql"
+	"encoding/json"
+	"github.com/Cooooing/cutil/common/logger"
+	"time"
+)
+
+// Todo 目前采用json序列化方式。后续通过自定义tag反射实现映射。
+
+func Raw2StructByPage[T any](db *sql.DB, page PageReqInterface, query string, args ...any) ([]T, error) {
+	list, err := Raw2MapByPage(db, page, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	bytes, err := json.Marshal(list)
+	if err != nil {
+		return nil, err
+	}
+	var result []T
+	err = json.Unmarshal(bytes, &result)
+	if err != nil {
+		return nil, err
+	}
+	return result, err
+}
+
+func Raw2MapByPage(db *sql.DB, page PageReqInterface, query string, args ...any) ([]map[string]any, error) {
+	rows, err := db.Query(query, args...)
+	if err != nil {
+		return nil, err
+	}
+
+	list := make([]map[string]any, 0, page.GetSize())
+
+	columns, err := rows.Columns()
+	if err != nil {
+		return nil, err
+	}
+	defer func(rows *sql.Rows) {
+		err := rows.Close()
+		if err != nil {
+			logger.Error("close rows failed: %w", err)
+		}
+	}(rows)
+	columnMap := make(map[string]int)
+	for i, col := range columns {
+		columnMap[col] = i
+	}
+
+	start := (page.GetPage() - 1) * page.GetSize()
+	end := start + page.GetSize()
+
+	current := 0
+	for rows.Next() {
+		current++
+		// 跳过不需要的记录
+		if current < start {
+			continue
+		}
+		// 达到分页结束位置，停止遍历
+		if current >= end {
+			break // 提前终止，减少后续数据传输
+		}
+
+		values := make([]any, len(columns))
+		valuePtrs := make([]any, len(columns))
+		for i := range values {
+			valuePtrs[i] = &values[i]
+		}
+
+		// 扫描行数据
+		data := make(map[string]any, len(columns))
+		err = rows.Scan(valuePtrs...)
+		if err != nil {
+			return nil, err
+		}
+		for _, key := range columns {
+			switch v := values[columnMap[key]].(type) {
+			case []byte:
+				data[key] = string(v)
+			case nil, string, int64, int32, int16, float64, float32, bool, time.Time:
+				data[key] = v
+			default:
+				data[key] = v
+			}
+		}
+		list = append(list, data)
+	}
+	return list, nil
+}
+
+func Raw2Struct[T any](db *sql.DB, query string, args ...any) ([]T, error) {
+	list, err := Raw2Map(db, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	bytes, err := json.Marshal(list)
+	if err != nil {
+		return nil, err
+	}
+	var result []T
+	err = json.Unmarshal(bytes, &result)
+	if err != nil {
+		return nil, err
+	}
+	return result, err
+}
+
+func Raw2Map(db *sql.DB, query string, args ...any) ([]map[string]any, error) {
+	rows, err := db.Query(query, args...)
+	if err != nil {
+		return nil, err
+	}
+
+	list := make([]map[string]any, 0)
+
+	columns, err := rows.Columns()
+	if err != nil {
+		return nil, err
+	}
+	columnMap := make(map[string]int)
+	for i, col := range columns {
+		columnMap[col] = i
+	}
+
+	for rows.Next() {
+		values := make([]any, len(columns))
+		valuePtrs := make([]any, len(columns))
+		for i := range values {
+			valuePtrs[i] = &values[i]
+		}
+
+		// 扫描行数据
+		data := make(map[string]any, len(columns))
+		err = rows.Scan(valuePtrs...)
+		if err != nil {
+			return nil, err
+		}
+		for _, key := range columns {
+			switch v := values[columnMap[key]].(type) {
+			case []byte:
+				data[key] = string(v)
+			case nil, string, int64, int32, int16, float64, float32, bool, time.Time:
+				data[key] = v
+			default:
+				data[key] = v
+			}
+		}
+		list = append(list, data)
+	}
+	return list, nil
+}
