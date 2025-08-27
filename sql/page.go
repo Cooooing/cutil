@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/Cooooing/cutil/common/logger"
+	"github.com/Cooooing/cutil/sql/base"
 	"sync"
 	"time"
 )
@@ -50,7 +51,7 @@ func (p *PageResp[T]) SetTotal(total int) {
 	p.Total = total
 }
 
-func (p *PageResp[T]) SetPageReq(pageReq PageReqInterface) {
+func (p *PageResp[T]) SetPageReq(pageReq base.PageReqInterface) {
 	p.Page = pageReq.GetPage()
 	p.Size = pageReq.GetSize()
 }
@@ -72,8 +73,8 @@ func (p *PageResp[T]) GetSize() int {
 
 // ---------------- PageRespFactory ----------------
 
-type PageReqFactory func() PageReqInterface
-type PageRespFactory[T any] func() PageRespInterface[T]
+type PageReqFactory func() base.PageReqInterface
+type PageRespFactory[T any] func() base.PageRespInterface[T]
 
 var (
 	mu                     sync.RWMutex
@@ -95,7 +96,7 @@ func SetDefaultPageRespFactory[T any](factory PageRespFactory[T]) {
 	defaultPageRespFactory = factory
 }
 
-func getDefaultPageReq() PageReqInterface {
+func getDefaultPageReq() base.PageReqInterface {
 	mu.RLock()
 	defer mu.RUnlock()
 	if defaultPageReqFactory != nil {
@@ -104,7 +105,7 @@ func getDefaultPageReq() PageReqInterface {
 	return &PageReq{}
 }
 
-func getDefaultPageResp[T any]() PageRespInterface[T] {
+func getDefaultPageResp[T any]() base.PageRespInterface[T] {
 	mu.RLock()
 	defer mu.RUnlock()
 	if defaultPageRespFactory != nil {
@@ -146,7 +147,7 @@ func QueryCount(db *sql.DB, query string, args ...any) (int, error) {
 // 返回:
 //   - PageRespInterface[T]: 分页结果
 //   - error: 校验失败的错误信息
-func PageQueryForStruct[T any](db *sql.DB, page PageReqInterface, query string, args ...any) (PageRespInterface[T], error) {
+func PageQueryForStruct[T any](db *sql.DB, page base.PageReqInterface, query string, args ...any) (base.PageRespInterface[T], error) {
 	var err error
 	if page == nil {
 		page = getDefaultPageReq()
@@ -180,7 +181,7 @@ func PageQueryForStruct[T any](db *sql.DB, page PageReqInterface, query string, 
 // 返回:
 //   - PageRespInterface[map[string]any]: 分页结果
 //   - error: 校验失败的错误信息
-func PageQueryForMap(db *sql.DB, page PageReqInterface, query string, args ...any) (PageRespInterface[map[string]any], error) {
+func PageQueryForMap(db *sql.DB, page base.PageReqInterface, query string, args ...any) (base.PageRespInterface[map[string]any], error) {
 	var err error
 	if page == nil {
 		page = getDefaultPageReq()
@@ -203,7 +204,7 @@ func PageQueryForMap(db *sql.DB, page PageReqInterface, query string, args ...an
 	return pageResp, nil
 }
 
-func pageQueryForStruct[T any](db *sql.DB, page PageReqInterface, countQuery string, query string, args ...any) (PageRespInterface[T], error) {
+func pageQueryForStruct[T any](db *sql.DB, page base.PageReqInterface, countQuery string, query string, args ...any) (base.PageRespInterface[T], error) {
 	var err error
 	if page == nil {
 		page = getDefaultPageReq()
@@ -226,7 +227,7 @@ func pageQueryForStruct[T any](db *sql.DB, page PageReqInterface, countQuery str
 	return pageResp, nil
 }
 
-func pageQueryForMap(db *sql.DB, page PageReqInterface, countQuery string, query string, args ...any) (PageRespInterface[map[string]any], error) {
+func pageQueryForMap(db *sql.DB, page base.PageReqInterface, countQuery string, query string, args ...any) (base.PageRespInterface[map[string]any], error) {
 	var err error
 	if page == nil {
 		page = getDefaultPageReq()
@@ -260,7 +261,7 @@ func pageQueryForMap(db *sql.DB, page PageReqInterface, countQuery string, query
 // 返回:
 //   - PageRespInterface[T]: 分页结果
 //   - error: 校验失败的错误信息
-func PageQueryForStructWithLimitOffset[T any](db *sql.DB, page PageReqInterface, query string, args ...any) (PageRespInterface[T], error) {
+func PageQueryForStructWithLimitOffset[T any](db *sql.DB, page base.PageReqInterface, query string, args ...any) (base.PageRespInterface[T], error) {
 	return pageQueryForStruct[T](db, page, query, getLimitOffsetQuery(page, query), args...)
 }
 
@@ -275,11 +276,11 @@ func PageQueryForStructWithLimitOffset[T any](db *sql.DB, page PageReqInterface,
 // 返回:
 //   - PageRespInterface[map[string]any]: 分页结果
 //   - error: 校验失败的错误信息
-func PageQueryForMapWithLimitOffset(db *sql.DB, page PageReqInterface, query string, args ...any) (PageRespInterface[map[string]any], error) {
+func PageQueryForMapWithLimitOffset(db *sql.DB, page base.PageReqInterface, query string, args ...any) (base.PageRespInterface[map[string]any], error) {
 	return pageQueryForMap(db, page, query, getLimitOffsetQuery(page, query), args...)
 }
 
-func getLimitOffsetQuery(page PageReqInterface, query string) string {
+func getLimitOffsetQuery(page base.PageReqInterface, query string) string {
 	return fmt.Sprintf(`SELECT t.* FROM (%s) AS t LIMIT %d OFFSET %d`, query, page.GetSize(), (page.GetPage()-1)*page.GetSize())
 }
 
@@ -294,7 +295,7 @@ func getLimitOffsetQuery(page PageReqInterface, query string) string {
 // 返回:
 //   - PageRespInterface[T]: 分页结果
 //   - error: 校验失败的错误信息
-func PageQueryForStructWithRowNumber[T any](db *sql.DB, page PageReqInterface, query string, args ...any) (PageRespInterface[T], error) {
+func PageQueryForStructWithRowNumber[T any](db *sql.DB, page base.PageReqInterface, query string, args ...any) (base.PageRespInterface[T], error) {
 	return pageQueryForStruct[T](db, page, query, getRowNumberQuery(page, query), args...)
 }
 
@@ -309,11 +310,11 @@ func PageQueryForStructWithRowNumber[T any](db *sql.DB, page PageReqInterface, q
 // 返回:
 //   - PageRespInterface[map[string]any]: 分页结果
 //   - error: 校验失败的错误信息
-func PageQueryForMapWithRowNumber(db *sql.DB, page PageReqInterface, query string, args ...any) (PageRespInterface[map[string]any], error) {
+func PageQueryForMapWithRowNumber(db *sql.DB, page base.PageReqInterface, query string, args ...any) (base.PageRespInterface[map[string]any], error) {
 	return pageQueryForMap(db, page, query, getRowNumberQuery(page, query), args...)
 }
 
-func getRowNumberQuery(page PageReqInterface, query string) string {
+func getRowNumberQuery(page base.PageReqInterface, query string) string {
 	return fmt.Sprintf(`SELECT * FROM (SELECT t.*, ROW_NUMBER() OVER () AS rn FROM (%s) AS t ) AS sub WHERE rn BETWEEN %d AND %d`, query, (page.GetPage()-1)*page.GetSize()+1, page.GetPage()*page.GetSize())
 }
 
@@ -328,7 +329,7 @@ func getRowNumberQuery(page PageReqInterface, query string) string {
 // 返回:
 //   - PageRespInterface[T]: 分页结果
 //   - error: 校验失败的错误信息
-func PageQueryForStructWithFetchOffset[T any](db *sql.DB, page PageReqInterface, query string, args ...any) (PageRespInterface[T], error) {
+func PageQueryForStructWithFetchOffset[T any](db *sql.DB, page base.PageReqInterface, query string, args ...any) (base.PageRespInterface[T], error) {
 	return pageQueryForStruct[T](db, page, query, getFetchOffsetQuery(page, query), args...)
 }
 
@@ -343,11 +344,11 @@ func PageQueryForStructWithFetchOffset[T any](db *sql.DB, page PageReqInterface,
 // 返回:
 //   - PageRespInterface[map[string]any]: 分页结果
 //   - error: 校验失败的错误信息
-func PageQueryForMapWithFetchOffset(db *sql.DB, page PageReqInterface, query string, args ...any) (PageRespInterface[map[string]any], error) {
+func PageQueryForMapWithFetchOffset(db *sql.DB, page base.PageReqInterface, query string, args ...any) (base.PageRespInterface[map[string]any], error) {
 	return pageQueryForMap(db, page, query, getFetchOffsetQuery(page, query), args...)
 }
 
-func getFetchOffsetQuery(page PageReqInterface, query string) string {
+func getFetchOffsetQuery(page base.PageReqInterface, query string) string {
 	return fmt.Sprintf(`SELECT t.* FROM (%s) AS t OFFSET %d ROWS FETCH NEXT %d ROWS ONLY`, query, (page.GetPage()-1)*page.GetSize(), page.GetSize())
 }
 
@@ -362,7 +363,7 @@ func getFetchOffsetQuery(page PageReqInterface, query string) string {
 // 返回:
 //   - PageRespInterface[T]: 分页结果
 //   - error: 校验失败的错误信息
-func PageQueryForStructWithDeclareCursor[T any](db *sql.DB, page PageReqInterface, query string, args ...any) (PageRespInterface[T], error) {
+func PageQueryForStructWithDeclareCursor[T any](db *sql.DB, page base.PageReqInterface, query string, args ...any) (base.PageRespInterface[T], error) {
 	var err error
 	if page == nil {
 		page = getDefaultPageReq()
@@ -402,7 +403,7 @@ func PageQueryForStructWithDeclareCursor[T any](db *sql.DB, page PageReqInterfac
 // 返回:
 //   - PageRespInterface[map[string]any]: 分页结果
 //   - error: 校验失败的错误信息
-func PageQueryForMapWithDeclareCursor(db *sql.DB, page PageReqInterface, query string, args ...any) (PageRespInterface[map[string]any], error) {
+func PageQueryForMapWithDeclareCursor(db *sql.DB, page base.PageReqInterface, query string, args ...any) (base.PageRespInterface[map[string]any], error) {
 	var err error
 	if page == nil {
 		page = getDefaultPageReq()
@@ -508,7 +509,7 @@ func PageQueryForMapWithDeclareCursor(db *sql.DB, page PageReqInterface, query s
 	return pageResp, nil
 }
 
-func raw2StructByPage[T any](db *sql.DB, page PageReqInterface, query string, args ...any) ([]T, error) {
+func raw2StructByPage[T any](db *sql.DB, page base.PageReqInterface, query string, args ...any) ([]T, error) {
 	list, err := raw2MapByPage(db, page, query, args...)
 	if err != nil {
 		return nil, err
@@ -525,7 +526,7 @@ func raw2StructByPage[T any](db *sql.DB, page PageReqInterface, query string, ar
 	return result, err
 }
 
-func raw2MapByPage(db *sql.DB, page PageReqInterface, query string, args ...any) ([]map[string]any, error) {
+func raw2MapByPage(db *sql.DB, page base.PageReqInterface, query string, args ...any) ([]map[string]any, error) {
 	rows, err := db.Query(query, args...)
 	if err != nil {
 		return nil, err
