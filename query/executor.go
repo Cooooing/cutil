@@ -5,8 +5,18 @@ import (
 	"errors"
 	"fmt"
 	"github.com/Cooooing/cutil/common/logger"
-	"github.com/Cooooing/cutil/sql/base"
+	"github.com/Cooooing/cutil/query/base"
 )
+
+var debug = false
+
+func Debug() {
+	debug = true
+}
+
+func UnDebug() {
+	debug = false
+}
 
 type Executor[T any] struct {
 	db      *sql.DB
@@ -33,7 +43,7 @@ func (e *Executor[T]) Log() {
 }
 
 func (e *Executor[T]) log(s string, args ...any) {
-	if e.debug {
+	if e.debug || debug {
 		logger.Info("\nSQL: %s\nArgs:%+v", s, args)
 	}
 }
@@ -76,7 +86,7 @@ func (e *Executor[T]) List() ([]T, error) {
 	return nil, base.ErrorExecutorNotSupportSelect
 }
 
-func (e *Executor[T]) Count() (int, error) {
+func (e *Executor[any]) Count() (int, error) {
 	if _, ok := e.builder.(base.SelectBuilder); ok {
 		s, args := e.builder.Build()
 		e.log(s, args...)

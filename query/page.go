@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/Cooooing/cutil/common/logger"
-	"github.com/Cooooing/cutil/sql/base"
+	"github.com/Cooooing/cutil/query/base"
 	"sync"
 	"time"
 )

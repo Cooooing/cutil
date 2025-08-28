@@ -2,7 +2,7 @@ package dml
 
 import (
 	"fmt"
-	"github.com/Cooooing/cutil/sql/base"
+	"github.com/Cooooing/cutil/query/base"
 	"strings"
 )
 

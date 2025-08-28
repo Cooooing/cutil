@@ -1,4 +1,4 @@
-module github.com/Cooooing/cutil/sql
+module github.com/Cooooing/cutil/query
 
 go 1.24
 
