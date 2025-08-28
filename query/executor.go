@@ -20,11 +20,11 @@ func UnDebug() {
 
 type Executor[T any] struct {
 	db      *sql.DB
-	builder base.BaseBuilder
+	builder base.Builder
 	debug   bool
 }
 
-func WithExecutor[T any](db *sql.DB, builder base.BaseBuilder) *Executor[T] {
+func WithExecutor[T any](db *sql.DB, builder base.Builder) *Executor[T] {
 	return &Executor[T]{
 		db:      db,
 		builder: builder,
@@ -65,23 +65,23 @@ func (e *Executor[T]) First() (*T, error) {
 		s, args := e.builder.Build()
 		e.log(s, args...)
 		s = fmt.Sprintf(`SELECT t.* FROM (%s) AS t LIMIT %d`, s, 1)
-		t, err := base.Raw2Struct[T](e.db, s, args...)
+		t, err := base.Raws2Struct[T](e.db, s, args...)
 		if err != nil {
 			return nil, err
 		}
 		if len(t) == 0 {
 			return nil, errors.New("no data")
 		}
-		return &t[0], err
+		return t[0], err
 	}
 	return nil, base.ErrorExecutorNotSupportSelect
 }
 
-func (e *Executor[T]) List() ([]T, error) {
+func (e *Executor[T]) List() ([]*T, error) {
 	if _, ok := e.builder.(base.SelectBuilder); ok {
 		s, args := e.builder.Build()
 		e.log(s, args...)
-		return base.Raw2Struct[T](e.db, s, args...)
+		return base.Raws2Struct[T](e.db, s, args...)
 	}
 	return nil, base.ErrorExecutorNotSupportSelect
 }

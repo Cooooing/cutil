@@ -37,13 +37,13 @@ func (p *PageReq) GetSize() int {
 // ---------------- PageResp ----------------
 
 type PageResp[T any] struct {
-	Page  int `json:"page"`
-	Size  int `json:"size"`
-	Total int `json:"total"`
-	List  []T `json:"list"`
+	Page  int  `json:"page"`
+	Size  int  `json:"size"`
+	Total int  `json:"total"`
+	List  []*T `json:"list"`
 }
 
-func (p *PageResp[T]) SetList(data []T) {
+func (p *PageResp[T]) SetList(data []*T) {
 	p.List = data
 }
 
@@ -56,7 +56,7 @@ func (p *PageResp[T]) SetPageReq(pageReq base.PageReqInterface) {
 	p.Size = pageReq.GetSize()
 }
 
-func (p *PageResp[T]) GetList() []T {
+func (p *PageResp[T]) GetList() []*T {
 	return p.List
 }
 
@@ -219,7 +219,7 @@ func pageQueryForStruct[T any](db *sql.DB, page base.PageReqInterface, countQuer
 	}
 	pageResp.SetTotal(total)
 	pageResp.SetPageReq(page)
-	list, err := base.Raw2Struct[T](db, query, args...)
+	list, err := base.Raws2Struct[T](db, query, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -381,7 +381,7 @@ func PageQueryForStructWithDeclareCursor[T any](db *sql.DB, page base.PageReqInt
 	if err != nil {
 		return nil, err
 	}
-	var list []T
+	var list []*T
 	err = json.Unmarshal(bytes, &list)
 	if err != nil {
 		return nil, err
@@ -464,7 +464,7 @@ func PageQueryForMapWithDeclareCursor(db *sql.DB, page base.PageReqInterface, qu
 	}(rows)
 
 	// 数据映射
-	list := make([]map[string]any, 0, page.GetSize())
+	list := make([]*map[string]any, 0, page.GetSize())
 	columns, err := rows.Columns()
 	if err != nil {
 		return nil, err
@@ -496,7 +496,7 @@ func PageQueryForMapWithDeclareCursor(db *sql.DB, page base.PageReqInterface, qu
 				data[key] = v
 			}
 		}
-		list = append(list, data)
+		list = append(list, &data)
 	}
 	pageResp.SetList(list)
 

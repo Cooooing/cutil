@@ -3,13 +3,14 @@ package test
 import (
 	"encoding/json"
 	"github.com/Cooooing/cutil/common/logger"
-	"github.com/Cooooing/cutil/sql"
-	"github.com/Cooooing/cutil/sql/dql"
+	"github.com/Cooooing/cutil/query"
+	"github.com/Cooooing/cutil/query/dql"
 	"testing"
 )
 
 func TestSimpleSelect(t *testing.T) {
 	Init()
+	sql.Debug()
 
 	/*
 		SELECT id, name, age, email, created_at
@@ -22,12 +23,23 @@ func TestSimpleSelect(t *testing.T) {
 			Columns("id", "name", "age", "email", "created_at").
 			From("users").
 			Where(dql.NewCondition().Gt("age", 20)),
-	).Debug().List()
+	).List()
 	if err != nil {
 		t.Error(err)
 	}
 	logger.Info("users: %+v", len(users))
 	bytes, _ := json.Marshal(users)
+	logger.Info("users: %s", string(bytes))
+
+	count, err := sql.WithExecutor[any](DB, dql.NewSelect().
+		Columns("id", "name", "age", "email", "created_at").
+		From("users").
+		Where(dql.NewCondition().Gt("age", 20))).List()
+	if err != nil {
+		t.Error(err)
+	}
+	logger.Info("users: %+v", len(count))
+	bytes, _ = json.Marshal(count)
 	logger.Info("users: %s", string(bytes))
 
 }
@@ -36,7 +48,7 @@ func TestJoinSelect(t *testing.T) {
 	Init()
 	var (
 		err   error
-		res   []PostTitle
+		res   []*PostTitle
 		bytes []byte
 	)
 	/*
@@ -83,7 +95,7 @@ func TestNestedSelect(t *testing.T) {
 	Init()
 	var (
 		err   error
-		res   []PostTitle
+		res   []*PostTitle
 		bytes []byte
 	)
 	/*

@@ -497,7 +497,7 @@ func TestForEach(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			ctx := context.Background()
-			collected := []int{}
+			var collected []int
 			consumer := func(x int) { collected = append(collected, x) }
 			stream := Of(ctx, tt.input...)
 			err := stream.ForEach(consumer)

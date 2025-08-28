@@ -4,12 +4,146 @@ import (
 	"database/sql"
 	"encoding/json"
 	"github.com/Cooooing/cutil/common/logger"
+	"github.com/Cooooing/cutil/common/str"
+	"reflect"
+	"strings"
 	"time"
 )
 
 // Todo 目前采用json序列化方式。后续通过自定义tag反射实现映射。
 
-func Raw2StructByPage[T any](db *sql.DB, page PageReqInterface, query string, args ...any) ([]T, error) {
+const FieldTag = "corm"
+const FieldTagColumn = "column"
+const FieldTagComment = "comment"
+const FieldTagPrimaryKey = "primaryKey"
+
+type FieldMeta struct {
+	Field     reflect.StructField
+	Column    string
+	IsPrimary bool
+	Comment   string
+}
+
+// parseCormTag 解析 corm:"..." 标签
+func parseCormTag(sf reflect.StructField) FieldMeta {
+	tag := sf.Tag.Get(FieldTag)
+	meta := FieldMeta{
+		Field:  sf,
+		Column: str.ToSnakeCase(sf.Name), // 默认用蛇形命名字段名
+	}
+	if tag == "" {
+		return meta
+	}
+
+	parts := strings.Split(tag, ";")
+	for _, part := range parts {
+		if part == "" {
+			continue
+		}
+
+		kv := strings.SplitN(part, ":", 2)
+		key := strings.TrimSpace(kv[0])
+
+		if len(kv) == 1 {
+			// 单独的flag（如 primaryKey）
+			switch strings.ToLower(key) {
+			case FieldTagPrimaryKey:
+				meta.IsPrimary = true
+			}
+			continue
+		}
+
+		val := strings.TrimSpace(kv[1])
+		switch strings.ToLower(key) {
+		case FieldTagColumn:
+			meta.Column = val
+		case FieldTagComment:
+			meta.Comment = val
+		}
+	}
+
+	return meta
+}
+
+func Raw2Struct[T any](columns []string, rows *sql.Rows) (*T, error) {
+	var (
+		err  error
+		item = new(T)
+	)
+	// 准备扫描容器
+	values := make([]any, len(columns))
+	valuePtrs := make([]any, len(columns))
+	for i := range values {
+		valuePtrs[i] = &values[i]
+	}
+
+	// 扫描一行
+	if err = rows.Scan(valuePtrs...); err != nil {
+		return nil, err
+	}
+
+	// 遍历 struct 字段并赋值
+	v := reflect.ValueOf(item).Elem()
+	t := v.Type()
+	for i := 0; i < v.NumField(); i++ {
+		field := v.Field(i)
+		sf := t.Field(i)
+		meta := parseCormTag(sf)
+		col := strings.ToLower(meta.Column)
+
+		// 找到列索引
+		var idx = -1
+		for j, c := range columns {
+			if strings.ToLower(c) == col {
+				idx = j
+				break
+			}
+		}
+		if idx == -1 {
+			continue
+		}
+
+		val := values[idx]
+		if val == nil {
+			continue
+		}
+
+		fv := reflect.ValueOf(val)
+
+		// []byte 转 string
+		if b, ok := val.([]byte); ok {
+			if field.Kind() == reflect.String {
+				field.SetString(string(b))
+				continue
+			}
+			if field.Kind() == reflect.Pointer && field.Type().Elem().Kind() == reflect.String {
+				s := string(b)
+				field.Set(reflect.ValueOf(&s))
+				continue
+			}
+		}
+
+		// 普通赋值（支持指针字段）
+		if field.Kind() == reflect.Pointer {
+			ptr := reflect.New(field.Type().Elem())
+			if fv.Type().AssignableTo(field.Type().Elem()) {
+				ptr.Elem().Set(fv)
+			} else if fv.Type().ConvertibleTo(field.Type().Elem()) {
+				ptr.Elem().Set(fv.Convert(field.Type().Elem()))
+			}
+			field.Set(ptr)
+		} else {
+			if fv.Type().AssignableTo(field.Type()) {
+				field.Set(fv)
+			} else if fv.Type().ConvertibleTo(field.Type()) {
+				field.Set(fv.Convert(field.Type()))
+			}
+		}
+	}
+	return item, nil
+}
+
+func Raw2StructByPage[T any](db *sql.DB, page PageReqInterface, query string, args ...any) ([]*T, error) {
 	list, err := Raw2MapByPage(db, page, query, args...)
 	if err != nil {
 		return nil, err
@@ -18,7 +152,7 @@ func Raw2StructByPage[T any](db *sql.DB, page PageReqInterface, query string, ar
 	if err != nil {
 		return nil, err
 	}
-	var result []T
+	var result []*T
 	err = json.Unmarshal(bytes, &result)
 	if err != nil {
 		return nil, err
@@ -26,13 +160,13 @@ func Raw2StructByPage[T any](db *sql.DB, page PageReqInterface, query string, ar
 	return result, err
 }
 
-func Raw2MapByPage(db *sql.DB, page PageReqInterface, query string, args ...any) ([]map[string]any, error) {
+func Raw2MapByPage(db *sql.DB, page PageReqInterface, query string, args ...any) ([]*map[string]any, error) {
 	rows, err := db.Query(query, args...)
 	if err != nil {
 		return nil, err
 	}
 
-	list := make([]map[string]any, 0, page.GetSize())
+	list := make([]*map[string]any, 0, page.GetSize())
 
 	columns, err := rows.Columns()
 	if err != nil {
@@ -86,35 +220,59 @@ func Raw2MapByPage(db *sql.DB, page PageReqInterface, query string, args ...any)
 				data[key] = v
 			}
 		}
-		list = append(list, data)
+		list = append(list, &data)
 	}
 	return list, nil
 }
 
-func Raw2Struct[T any](db *sql.DB, query string, args ...any) ([]T, error) {
-	list, err := Raw2Map(db, query, args...)
-	if err != nil {
-		return nil, err
-	}
-	bytes, err := json.Marshal(list)
-	if err != nil {
-		return nil, err
-	}
-	var result []T
-	err = json.Unmarshal(bytes, &result)
-	if err != nil {
-		return nil, err
-	}
-	return result, err
-}
+func Raws2Struct[T any](db *sql.DB, query string, args ...any) ([]*T, error) {
+	var (
+		err  error
+		list []*T
+	)
 
-func Raw2Map(db *sql.DB, query string, args ...any) ([]map[string]any, error) {
 	rows, err := db.Query(query, args...)
 	if err != nil {
 		return nil, err
 	}
 
-	list := make([]map[string]any, 0)
+	columns, err := rows.Columns()
+	if err != nil {
+		return nil, err
+	}
+
+	for rows.Next() {
+		item, err := Raw2Struct[T](columns, rows)
+		if err != nil {
+			return nil, err
+		}
+		list = append(list, item)
+	}
+	return list, nil
+
+	// list, err := Raw2Map(db, query, args...)
+	// if err != nil {
+	// 	return nil, err
+	// }
+	// bytes, err := json.Marshal(list)
+	// if err != nil {
+	// 	return nil, err
+	// }
+	// var result []T
+	// err = json.Unmarshal(bytes, &result)
+	// if err != nil {
+	// 	return nil, err
+	// }
+	// return result, err
+}
+
+func Raw2Map(db *sql.DB, query string, args ...any) ([]*map[string]any, error) {
+	rows, err := db.Query(query, args...)
+	if err != nil {
+		return nil, err
+	}
+
+	list := make([]*map[string]any, 0)
 
 	columns, err := rows.Columns()
 	if err != nil {
@@ -148,7 +306,7 @@ func Raw2Map(db *sql.DB, query string, args ...any) ([]map[string]any, error) {
 				data[key] = v
 			}
 		}
-		list = append(list, data)
+		list = append(list, &data)
 	}
 	return list, nil
 }

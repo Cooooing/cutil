@@ -2,10 +2,10 @@ package base
 
 // PageRespInterface 分页查询参数接口
 type PageRespInterface[T any] interface {
-	SetList(data []T)
+	SetList(data []*T)
 	SetTotal(total int)
 	SetPageReq(pageReq PageReqInterface)
-	GetList() []T
+	GetList() []*T
 	GetTotal() int
 	GetPage() int
 	GetSize() int
@@ -18,15 +18,15 @@ type PageReqInterface interface {
 	GetSize() int
 }
 
-// BaseBuilder 通用方法接口
-type BaseBuilder interface {
+// Builder 通用方法接口
+type Builder interface {
 	GetSql() string
 	GetArgs() []any
 	Build() (string, []any)
 }
 
 type ConditionBuilder interface {
-	BaseBuilder
+	Builder
 
 	Where(column string, args ...any) ConditionBuilder
 	WhereIf(condition bool, column string, args ...any) ConditionBuilder
@@ -144,7 +144,7 @@ type ConditionBuilder interface {
 }
 
 type SelectBuilder interface {
-	BaseBuilder
+	Builder
 
 	From(table string) SelectBuilder
 	FromAlias(table string, alias string) SelectBuilder
@@ -174,7 +174,7 @@ type SelectBuilder interface {
 }
 
 type UpdateBuilder interface {
-	BaseBuilder
+	Builder
 
 	Table(table string) UpdateBuilder
 	TableAlias(table string, alias string) UpdateBuilder
@@ -183,7 +183,7 @@ type UpdateBuilder interface {
 }
 
 type InsertBuilder interface {
-	BaseBuilder
+	Builder
 
 	Into(table string) InsertBuilder
 	Columns(cols ...string) InsertBuilder
@@ -192,7 +192,7 @@ type InsertBuilder interface {
 }
 
 type DeleteBuilder interface {
-	BaseBuilder
+	Builder
 
 	From(table string) DeleteBuilder
 	FromAlias(table string, alias string) DeleteBuilder
