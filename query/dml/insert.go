@@ -2,8 +2,9 @@ package dml
 
 import (
 	"fmt"
-	"github.com/Cooooing/cutil/query/base"
 	"strings"
+
+	"github.com/Cooooing/cutil/query/base"
 )
 
 type Insert struct {

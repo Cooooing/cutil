@@ -2,10 +2,11 @@ package test
 
 import (
 	"encoding/json"
+	"testing"
+
 	"github.com/Cooooing/cutil/common/logger"
 	"github.com/Cooooing/cutil/query"
 	"github.com/Cooooing/cutil/query/dql"
-	"testing"
 )
 
 func TestSimpleSelect(t *testing.T) {

@@ -3,11 +3,12 @@ package stream
 import (
 	"context"
 	"errors"
-	"github.com/Cooooing/cutil/common"
 	"reflect"
 	"strconv"
 	"testing"
 	"time"
+
+	"github.com/Cooooing/cutil/common"
 )
 
 func TestOf(t *testing.T) {

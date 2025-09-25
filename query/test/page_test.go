@@ -2,10 +2,11 @@ package test
 
 import (
 	"encoding/json"
+	"testing"
+
 	sql2 "github.com/Cooooing/cutil/query"
 	_ "github.com/go-sql-driver/mysql"
 	_ "github.com/lib/pq"
-	"testing"
 )
 
 const query = `select * from "user" where id in $1 order by id`

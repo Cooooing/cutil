@@ -3,11 +3,12 @@ package base
 import (
 	"database/sql"
 	"encoding/json"
-	"github.com/Cooooing/cutil/common/logger"
-	"github.com/Cooooing/cutil/common/str"
 	"reflect"
 	"strings"
 	"time"
+
+	"github.com/Cooooing/cutil/common/logger"
+	"github.com/Cooooing/cutil/common/str"
 )
 
 // Todo 目前采用json序列化方式。后续通过自定义tag反射实现映射。

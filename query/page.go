@@ -4,10 +4,11 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"github.com/Cooooing/cutil/common/logger"
-	"github.com/Cooooing/cutil/query/base"
 	"sync"
 	"time"
+
+	"github.com/Cooooing/cutil/common/logger"
+	"github.com/Cooooing/cutil/query/base"
 )
 
 // ---------------- PageReq ----------------

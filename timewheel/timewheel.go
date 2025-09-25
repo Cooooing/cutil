@@ -3,11 +3,12 @@ package timewheel
 import (
 	"container/list"
 	"errors"
+	"runtime/debug"
+	"time"
+
 	"github.com/Cooooing/cutil/common/logger"
 	"github.com/orcaman/concurrent-map/v2"
 	"github.com/panjf2000/ants/v2"
-	"runtime/debug"
-	"time"
 )
 
 // Timewheel 核心结构体

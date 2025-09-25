@@ -4,13 +4,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/Cooooing/cutil/common"
 	"sort"
 	"strconv"
 	"sync"
+
+	"github.com/Cooooing/cutil/common"
 )
 
-type Pipeline[T any] struct {
+type NoBlockStream[T any] struct {
 	ctx       context.Context
 	out       chan chan T
 	cancel    context.CancelFunc // 用于取消所有操作
@@ -23,9 +24,9 @@ type Pipeline[T any] struct {
 	hasOperations      bool // 标记是否已有操作，用于判断是否是第一次添加操作
 }
 
-func newPipeline[T any](ctx context.Context) *Pipeline[T] {
+func newNoBlockStream[T any](ctx context.Context) *NoBlockStream[T] {
 	ctx, cancel := context.WithCancel(ctx)
-	return &Pipeline[T]{
+	return &NoBlockStream[T]{
 		ctx:                ctx,
 		cancel:             cancel,
 		out:                make(chan chan T, 1),
@@ -36,7 +37,7 @@ func newPipeline[T any](ctx context.Context) *Pipeline[T] {
 
 // 中间操作
 
-func (p *Pipeline[T]) Map(action common.UnaryOperator[T]) Stream[T] {
+func (p *NoBlockStream[T]) Map(action common.UnaryOperator[T]) Stream[T] {
 	in, out := p.initOp()
 	p.wg.Add(p.parallelGoroutines)
 	var currentWg sync.WaitGroup
@@ -66,7 +67,7 @@ func (p *Pipeline[T]) Map(action common.UnaryOperator[T]) Stream[T] {
 	return p
 }
 
-func (p *Pipeline[T]) Peek(action common.Consumer[T]) Stream[T] {
+func (p *NoBlockStream[T]) Peek(action common.Consumer[T]) Stream[T] {
 	in, out := p.initOp()
 	p.wg.Add(p.parallelGoroutines)
 	var currentWg sync.WaitGroup
@@ -93,7 +94,7 @@ func (p *Pipeline[T]) Peek(action common.Consumer[T]) Stream[T] {
 	return p
 }
 
-func (p *Pipeline[T]) Filter(predicate common.Predicate[T]) Stream[T] {
+func (p *NoBlockStream[T]) Filter(predicate common.Predicate[T]) Stream[T] {
 	in, out := p.initOp()
 	p.wg.Add(p.parallelGoroutines)
 	var currentWg sync.WaitGroup
@@ -121,7 +122,7 @@ func (p *Pipeline[T]) Filter(predicate common.Predicate[T]) Stream[T] {
 	return p
 }
 
-func (p *Pipeline[T]) Skip(n int) Stream[T] {
+func (p *NoBlockStream[T]) Skip(n int) Stream[T] {
 	in, out := p.initOp()
 	p.wg.Add(1)
 	go func() {
@@ -143,7 +144,7 @@ func (p *Pipeline[T]) Skip(n int) Stream[T] {
 	}()
 	return p
 }
-func (p *Pipeline[T]) Limit(maxSize int) Stream[T] {
+func (p *NoBlockStream[T]) Limit(maxSize int) Stream[T] {
 	in, out := p.initOp()
 	p.wg.Add(1)
 	go func() {
@@ -166,7 +167,7 @@ func (p *Pipeline[T]) Limit(maxSize int) Stream[T] {
 	return p
 }
 
-func (p *Pipeline[T]) Distinct() Stream[T] {
+func (p *NoBlockStream[T]) Distinct() Stream[T] {
 	in, out := p.initOp()
 	p.wg.Add(1)
 	go func() {
@@ -189,7 +190,7 @@ func (p *Pipeline[T]) Distinct() Stream[T] {
 }
 
 // Sorted 排序操作
-func (p *Pipeline[T]) Sorted(comparator common.Comparator[T]) Stream[T] {
+func (p *NoBlockStream[T]) Sorted(comparator common.Comparator[T]) Stream[T] {
 	in, out := p.initOp()
 	p.wg.Add(1)
 	go func() {
@@ -231,7 +232,7 @@ func (p *Pipeline[T]) Sorted(comparator common.Comparator[T]) Stream[T] {
 
 // 终止操作
 
-func (p *Pipeline[T]) ForEach(action common.Consumer[T]) error {
+func (p *NoBlockStream[T]) ForEach(action common.Consumer[T]) error {
 	in := p.initTerminalOp()
 	if p.err != nil {
 		return p.err
@@ -251,12 +252,12 @@ func (p *Pipeline[T]) ForEach(action common.Consumer[T]) error {
 	}
 }
 
-func (p *Pipeline[T]) ForEachOrdered(comparator common.Comparator[T], action common.Consumer[T]) error {
+func (p *NoBlockStream[T]) ForEachOrdered(comparator common.Comparator[T], action common.Consumer[T]) error {
 	p.Sorted(comparator)
 	return p.ForEach(action)
 }
 
-func (p *Pipeline[T]) AnyMatch(predicate common.Predicate[T]) (bool, error) {
+func (p *NoBlockStream[T]) AnyMatch(predicate common.Predicate[T]) (bool, error) {
 	in := p.initTerminalOp()
 	if p.err != nil {
 		return false, p.err
@@ -276,7 +277,7 @@ func (p *Pipeline[T]) AnyMatch(predicate common.Predicate[T]) (bool, error) {
 	}
 }
 
-func (p *Pipeline[T]) AllMatch(predicate common.Predicate[T]) (bool, error) {
+func (p *NoBlockStream[T]) AllMatch(predicate common.Predicate[T]) (bool, error) {
 	in := p.initTerminalOp()
 	if p.err != nil {
 		return false, p.err
@@ -299,7 +300,7 @@ func (p *Pipeline[T]) AllMatch(predicate common.Predicate[T]) (bool, error) {
 	}
 }
 
-func (p *Pipeline[T]) NoneMatch(predicate common.Predicate[T]) (bool, error) {
+func (p *NoBlockStream[T]) NoneMatch(predicate common.Predicate[T]) (bool, error) {
 	in := p.initTerminalOp()
 	if p.err != nil {
 		return false, p.err
@@ -322,7 +323,7 @@ func (p *Pipeline[T]) NoneMatch(predicate common.Predicate[T]) (bool, error) {
 	}
 }
 
-func (p *Pipeline[T]) ToArray() ([]T, error) {
+func (p *NoBlockStream[T]) ToArray() ([]T, error) {
 	in := p.initTerminalOp()
 	if p.err != nil {
 		return nil, p.err
@@ -343,7 +344,7 @@ func (p *Pipeline[T]) ToArray() ([]T, error) {
 	}
 }
 
-func (p *Pipeline[T]) Count() (int, error) {
+func (p *NoBlockStream[T]) Count() (int, error) {
 	in := p.initTerminalOp()
 	if p.err != nil {
 		return 0, p.err
@@ -364,7 +365,7 @@ func (p *Pipeline[T]) Count() (int, error) {
 	}
 }
 
-func (p *Pipeline[T]) Min(comparator common.Comparator[T]) (T, error) {
+func (p *NoBlockStream[T]) Min(comparator common.Comparator[T]) (T, error) {
 	in := p.initTerminalOp()
 	var zero T
 	if p.err != nil {
@@ -388,7 +389,7 @@ func (p *Pipeline[T]) Min(comparator common.Comparator[T]) (T, error) {
 	}
 }
 
-func (p *Pipeline[T]) Max(comparator common.Comparator[T]) (T, error) {
+func (p *NoBlockStream[T]) Max(comparator common.Comparator[T]) (T, error) {
 	in := p.initTerminalOp()
 	var zero T
 	if p.err != nil {
@@ -412,7 +413,7 @@ func (p *Pipeline[T]) Max(comparator common.Comparator[T]) (T, error) {
 	}
 }
 
-func (p *Pipeline[T]) FindFirst() (T, error) {
+func (p *NoBlockStream[T]) FindFirst() (T, error) {
 	in := p.initTerminalOp()
 	var m T
 	if p.err != nil {
@@ -432,7 +433,7 @@ func (p *Pipeline[T]) FindFirst() (T, error) {
 		}
 	}
 }
-func (p *Pipeline[T]) FindAny() (T, error) {
+func (p *NoBlockStream[T]) FindAny() (T, error) {
 	in := p.initTerminalOp()
 	var m T
 	if p.err != nil {
@@ -453,7 +454,7 @@ func (p *Pipeline[T]) FindAny() (T, error) {
 	}
 }
 
-func (p *Pipeline[T]) Reduce(accumulator common.BinaryOperator[T]) (T, error) {
+func (p *NoBlockStream[T]) Reduce(accumulator common.BinaryOperator[T]) (T, error) {
 	in := p.initTerminalOp()
 	var result T
 	for {
@@ -471,7 +472,7 @@ func (p *Pipeline[T]) Reduce(accumulator common.BinaryOperator[T]) (T, error) {
 	}
 }
 
-func (p *Pipeline[T]) ReduceByDefault(identity T, accumulator common.BinaryOperator[T]) (T, error) {
+func (p *NoBlockStream[T]) ReduceByDefault(identity T, accumulator common.BinaryOperator[T]) (T, error) {
 	in := p.initTerminalOp()
 	result := identity
 	for {
@@ -489,20 +490,20 @@ func (p *Pipeline[T]) ReduceByDefault(identity T, accumulator common.BinaryOpera
 	}
 }
 
-func (p *Pipeline[T]) Iterator() chan T {
+func (p *NoBlockStream[T]) Iterator() chan T {
 	p.linkedOrConsumed = true
 	return <-p.out
 }
 
-func (p *Pipeline[T]) IsParallel() bool {
+func (p *NoBlockStream[T]) IsParallel() bool {
 	return p.parallelGoroutines != 1
 }
 
-func (p *Pipeline[T]) GetParallelGoroutines() int {
+func (p *NoBlockStream[T]) GetParallelGoroutines() int {
 	return p.parallelGoroutines
 }
 
-func (p *Pipeline[T]) Parallel(n int) Stream[T] {
+func (p *NoBlockStream[T]) Parallel(n int) Stream[T] {
 	if n <= 0 {
 		p.close(errors.New(fmt.Sprintf("parallelism must be positive,but now is %s", strconv.Itoa(n))))
 	}
@@ -516,12 +517,12 @@ func (p *Pipeline[T]) Parallel(n int) Stream[T] {
 
 // 其他辅助函数
 
-func (p *Pipeline[T]) getCtx() context.Context {
+func (p *NoBlockStream[T]) getCtx() context.Context {
 	return p.ctx
 }
 
 // initOp 初始化中间操作
-func (p *Pipeline[T]) initOp() (chan T, chan T) {
+func (p *NoBlockStream[T]) initOp() (chan T, chan T) {
 	if p.linkedOrConsumed {
 		p.close(errors.New("stream already operated upon or closed"))
 	}
@@ -536,7 +537,7 @@ func (p *Pipeline[T]) initOp() (chan T, chan T) {
 }
 
 // initTerminalOp 初始化终端操作
-func (p *Pipeline[T]) initTerminalOp() chan T {
+func (p *NoBlockStream[T]) initTerminalOp() chan T {
 	if p.linkedOrConsumed {
 		p.close(errors.New("stream already operated upon or closed"))
 	}
@@ -548,13 +549,13 @@ func (p *Pipeline[T]) initTerminalOp() chan T {
 	return in
 }
 
-func (p *Pipeline[T]) closeChan() chan T {
+func (p *NoBlockStream[T]) closeChan() chan T {
 	ch := make(chan T)
 	close(ch)
 	return ch
 }
 
-func (p *Pipeline[T]) close(err error) {
+func (p *NoBlockStream[T]) close(err error) {
 	go func() {
 		p.closeOnce.Do(func() {
 			if err != nil {

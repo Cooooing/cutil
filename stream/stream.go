@@ -2,8 +2,9 @@ package stream
 
 import (
 	"context"
-	"github.com/Cooooing/cutil/common"
 	"sync"
+
+	"github.com/Cooooing/cutil/common"
 )
 
 type Stream[T any] interface {
@@ -79,7 +80,7 @@ func Of[T any](ctx context.Context, values ...T) Stream[T] {
 	if len(values) == 0 {
 		return Empty[T](ctx) // 创建一个空流
 	}
-	p := newPipeline[T](ctx)
+	p := newNoBlockStream[T](ctx)
 	out := make(chan T, len(values)) // 使用缓冲通道优化性能
 	p.out <- out
 	go func() {
@@ -97,7 +98,7 @@ func Of[T any](ctx context.Context, values ...T) Stream[T] {
 
 // OfChan 从指定通道创建一个流（无限流）
 func OfChan[T any](ctx context.Context, ins ...chan T) Stream[T] {
-	p := newPipeline[T](ctx)
+	p := newNoBlockStream[T](ctx)
 	out := make(chan T, 1)
 	p.out <- out
 	go func() {
@@ -123,7 +124,7 @@ func OfChan[T any](ctx context.Context, ins ...chan T) Stream[T] {
 
 // Generate 返回一个无限流，由 Supplier 提供的元素组成
 func Generate[T any](ctx context.Context, s common.Supplier[T]) Stream[T] {
-	p := newPipeline[T](ctx)
+	p := newNoBlockStream[T](ctx)
 	out := make(chan T, 1)
 	p.out <- out
 	go func() {
@@ -144,7 +145,7 @@ func Concat[T any](ctx context.Context, streams ...Stream[T]) Stream[T] {
 	if len(streams) == 0 {
 		return Empty[T](ctx) // 返回空流
 	}
-	p := newPipeline[T](ctx)
+	p := newNoBlockStream[T](ctx)
 	out := make(chan T, 1)
 	p.out <- out
 	go func() {
@@ -164,7 +165,7 @@ func Concat[T any](ctx context.Context, streams ...Stream[T]) Stream[T] {
 
 // Empty 创建一个空流
 func Empty[T any](ctx context.Context) Stream[T] {
-	stream := newPipeline[T](ctx)
+	stream := newNoBlockStream[T](ctx)
 	stream.out <- stream.closeChan()
 	return stream
 }
@@ -174,7 +175,7 @@ func Empty[T any](ctx context.Context) Stream[T] {
 // Map 返回一个流，该流由将给定函数应用于该流元素的结果组成。
 func Map[T any, R any](stream Stream[T], mapper common.Function[T, R]) Stream[R] {
 	in := stream.Iterator()
-	p := newPipeline[R](stream.getCtx())
+	p := newNoBlockStream[R](stream.getCtx())
 	out := make(chan R, 1)
 	p.out <- out
 	go func() {
@@ -193,7 +194,7 @@ func Map[T any, R any](stream Stream[T], mapper common.Function[T, R]) Stream[R]
 // FlatMap 返回一个流，该流由将此流的每个元素替换为映射流的内容的结果组成，该映射流是通过将提供的映射函数应用于每个元素而生成的。每个映射的流在其内容被放入该流后都会被关闭。（如果映射的流为null，则使用空流。）
 func FlatMap[T any, R any](stream Stream[T], mapper common.Function[T, Stream[R]]) Stream[R] {
 	in := stream.Iterator()
-	p := newPipeline[R](stream.getCtx())
+	p := newNoBlockStream[R](stream.getCtx())
 	out := make(chan R, 1)
 	p.out <- out
 	go func() {

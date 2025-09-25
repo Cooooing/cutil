@@ -2,8 +2,9 @@ package dql
 
 import (
 	"fmt"
-	"github.com/Cooooing/cutil/query/base"
 	"strings"
+
+	"github.com/Cooooing/cutil/query/base"
 )
 
 type Select struct {

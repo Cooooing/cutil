@@ -2,10 +2,11 @@ package test
 
 import (
 	"encoding/json"
+	"testing"
+
 	"github.com/Cooooing/cutil/common/logger"
 	"github.com/Cooooing/cutil/query"
 	"github.com/Cooooing/cutil/query/dml"
-	"testing"
 )
 
 func TestInsert(t *testing.T) {

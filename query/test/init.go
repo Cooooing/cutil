@@ -2,9 +2,10 @@ package test
 
 import (
 	"database/sql"
-	"github.com/Cooooing/cutil/common/logger"
 	"log"
 	"time"
+
+	"github.com/Cooooing/cutil/common/logger"
 )
 
 var DB *sql.DB

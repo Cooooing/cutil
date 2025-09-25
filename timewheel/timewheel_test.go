@@ -1,9 +1,10 @@
 package timewheel
 
 import (
-	"github.com/Cooooing/cutil/common/logger"
 	"testing"
 	"time"
+
+	"github.com/Cooooing/cutil/common/logger"
 )
 
 func TestTimewheel(t *testing.T) {
