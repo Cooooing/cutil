@@ -2,12 +2,12 @@ package excel
 
 import (
 	"database/sql"
-	"errors"
 	"fmt"
-	"github.com/Cooooing/cutil/common/logger"
-	"github.com/xuri/excelize/v2"
 	"os"
 	"path/filepath"
+
+	"github.com/Cooooing/cutil/common/logger"
+	"github.com/xuri/excelize/v2"
 )
 
 // CheckFunc 校验函数
@@ -52,13 +52,13 @@ func (f *File) SetErrorStyle(style *excelize.Style) error {
 			},
 		})
 		if err != nil {
-			return errors.New(fmt.Sprintf("Failed to create style: %v", err))
+			return fmt.Errorf("failed to create style: %w", err)
 		}
 		f.errorStyleId = &styleId
 	} else {
 		styleId, err := f.file.NewStyle(style)
 		if err != nil {
-			return errors.New(fmt.Sprintf("Failed to create style: %v", err))
+			return fmt.Errorf("failed to create style: %w", err)
 		}
 		f.errorStyleId = &styleId
 	}
@@ -67,11 +67,11 @@ func (f *File) SetErrorStyle(style *excelize.Style) error {
 
 func (f *File) SetTitleStyle(style *excelize.Style) error {
 	if style == nil {
-		return errors.New("style cannot be nil")
+		return fmt.Errorf("title style cannot be nil")
 	}
 	styleId, err := f.file.NewStyle(style)
 	if err != nil {
-		return err
+		return fmt.Errorf("create title style: %w", err)
 	}
 	f.titleStyleId = &styleId
 	return nil
@@ -81,9 +81,20 @@ func (f *File) GetExcelizeFile() *excelize.File {
 	return f.file
 }
 
-func (f *File) checkParams(titles []string, keys []string) error {
+func (f *File) checkParams(sheetName string, titles []string, keys []string) error {
 	if len(titles) != len(keys) {
-		return errors.New("titles and keys length must be equal")
+		return fmt.Errorf("titles and keys length must be equal")
+	}
+	sheetIndex, err := f.file.GetSheetIndex(sheetName)
+	if err != nil {
+		return fmt.Errorf("get sheet index: %w", err)
+	}
+	if sheetIndex == -1 {
+		sheet, err := f.file.NewSheet(sheetName)
+		if err != nil {
+			return fmt.Errorf("create sheet: %w", err)
+		}
+		f.file.SetActiveSheet(sheet)
 	}
 	return nil
 }
@@ -97,74 +108,204 @@ func (f *File) checkParams(titles []string, keys []string) error {
 //   - error: 写入失败的错误信息
 func (f *File) WriteToFile(path string) error {
 	if f.fileName == "" {
-		return errors.New("file name is empty")
+		return fmt.Errorf("file name is empty")
 	}
 	file, err := os.Create(filepath.Join(path, f.fileName))
 	if err != nil {
 		return err
 	}
-	return f.file.Write(file)
-}
-
-// WriteToCellByCheck 将值写入 Excel 单元格，并对写入值进行校验
-//
-// 参数:
-//   - sheetName: 工作表名称
-//   - colIndex: 列索引（从 1 开始）
-//   - rowIndex: 行索引（从 1 开始）
-//   - value: 要写入的值
-//
-// 返回:
-//   - error: 写入失败的错误信息
-func (f *File) WriteToCellByCheck(sheetName string, rowIndex int, colIndex int, key string, value any) error {
-	if f.checkFunc != nil {
-		if checkErr := f.checkFunc(key, value); checkErr != nil {
-			colLetter, err := excelize.ColumnNumberToName(colIndex)
-			if err != nil {
-				return errors.New(fmt.Sprintf("Conversion column index %d failed: %v", colIndex, err))
-			}
-			cell := fmt.Sprintf("%s%d", colLetter, rowIndex)
-			if err := f.file.SetCellStyle(sheetName, cell, cell, *f.errorStyleId); err != nil {
-				return errors.New(fmt.Sprintf("Failed to set cell style: %v", err))
-			}
-			// 添加批注
-			if err := f.file.AddComment(sheetName, excelize.Comment{
-				Cell:   cell,
-				Author: "System",
-				Text:   fmt.Sprintf("%v", checkErr.Error()),
-			}); err != nil {
-				return errors.New(fmt.Sprintf("Failed to add comment: %v", err))
-			}
-
-			if err := f.file.SetCellValue(sheetName, cell, value); err != nil {
-				return errors.New(fmt.Sprintf("Failed to set cell %s: %v", cell, err))
-			}
+	defer func(file *os.File) {
+		if err := file.Close(); err != nil {
+			logger.Error("close file error: %w", err)
 		}
-	}
-	return f.WriteToCell(sheetName, rowIndex, colIndex, value)
-}
+	}(file)
 
-// WriteToCell 将值写入 Excel 单元格
-//
-// 参数:
-//   - sheetName: 工作表名称
-//   - colIndex: 列索引（从 1 开始）
-//   - rowIndex: 行索引（从 1 开始）
-//   - value: 要写入的值
-//
-// 返回:
-//   - error: 写入失败的错误信息
-func (f *File) WriteToCell(sheetName string, rowIndex int, colIndex int, value any) error {
-	colLetter, err := excelize.ColumnNumberToName(colIndex)
-	if err != nil {
-		return errors.New(fmt.Sprintf("Conversion column index %d failed: %v", colIndex, err))
-	}
-	cell := fmt.Sprintf("%s%d", colLetter, rowIndex)
-	if err := f.file.SetCellValue(sheetName, cell, value); err != nil {
-		return errors.New(fmt.Sprintf("Failed to set cell %s: %v", cell, err))
+	if err := f.file.Write(file); err != nil {
+		return err
 	}
 	return nil
 }
+
+// ================= 公共逻辑 =================
+
+// writeTitles 写标题行（支持流式/非流式）
+//
+// 参数:
+//   - sheetName: 工作表名称
+//   - titles: 标题行值
+//   - sw: 流式写入器
+//
+// 返回:
+//   - error: 写入失败的错误信息
+func (f *File) writeTitles(sheetName string, titles []string, sw *excelize.StreamWriter) error {
+	rowIndex := 1
+	titleData := make([]any, len(titles))
+
+	for i, title := range titles {
+		cell := excelize.Cell{Value: title}
+		if f.titleStyleId != nil {
+			cell.StyleID = *f.titleStyleId
+		}
+		titleData[i] = cell
+
+		if sw == nil {
+			cellAddr, _ := excelize.CoordinatesToCellName(i+1, rowIndex)
+			if err := f.file.SetCellValue(sheetName, cellAddr, title); err != nil {
+				return fmt.Errorf("set title cell value failed: %w", err)
+			}
+			if cell.StyleID > 0 {
+				if err := f.file.SetCellStyle(sheetName, cellAddr, cellAddr, cell.StyleID); err != nil {
+					return fmt.Errorf("set title cell style failed: %w", err)
+				}
+			}
+		}
+	}
+	cellIndex, _ := excelize.CoordinatesToCellName(1, rowIndex)
+	if sw != nil {
+		return sw.SetRow(cellIndex, titleData)
+	}
+	return nil
+}
+
+// writeRow 写一行数据（支持流式/非流式）
+//
+// 参数:
+//   - sheetName: 工作表名称
+//   - rowIndex: 行索引（从 1 开始）
+//   - keys: 数据键
+//   - row: 数据值
+//   - sw: 流式写入器
+//
+// 返回:
+//   - error: 写入失败的错误信息
+func (f *File) writeRow(sheetName string, rowIndex int, keys []string, row map[string]any, sw *excelize.StreamWriter) error {
+	data := make([]any, len(keys))
+
+	for j, key := range keys {
+		cellAddr, _ := excelize.CoordinatesToCellName(j+1, rowIndex)
+		cell := excelize.Cell{Value: row[key]}
+
+		if f.checkFunc != nil && f.errorStyleId != nil {
+			if err := f.checkFunc(key, row[key]); err != nil {
+				// 添加样式
+				cell.StyleID = *f.errorStyleId
+				// 添加批注
+				if err := f.file.AddComment(sheetName, excelize.Comment{
+					Cell:   cellAddr,
+					Author: "System",
+					Text:   fmt.Sprintf("%v", err.Error()),
+				}); err != nil {
+					return fmt.Errorf("failed to add comment: %w", err)
+				}
+			}
+		}
+
+		data[j] = cell
+
+		if sw == nil {
+			if err := f.file.SetCellValue(sheetName, cellAddr, cell.Value); err != nil {
+				return fmt.Errorf("failed to set cell value: %w", err)
+			}
+			if cell.StyleID > 0 {
+				if err := f.file.SetCellStyle(sheetName, cellAddr, cellAddr, cell.StyleID); err != nil {
+					return fmt.Errorf("set cell style failed: %w", err)
+				}
+			}
+		}
+	}
+	cellIndex, _ := excelize.CoordinatesToCellName(1, rowIndex)
+	if sw != nil {
+		return sw.SetRow(cellIndex, data)
+	}
+	return nil
+}
+
+// WriteCell 将值写入 Excel 单元格，并对写入值进行校验
+//
+// 参数:
+//   - sheetName: 工作表名称
+//   - rowIndex: 行索引（从 1 开始）
+//   - colIndex: 列索引（从 1 开始）
+//   - value: 要写入的值
+//
+// 返回:
+//   - error: 写入失败的错误信息
+func (f *File) WriteCell(sheetName string, rowIndex int, colIndex int, key string, value any) error {
+	cellAddr, err := excelize.CoordinatesToCellName(colIndex, rowIndex)
+	if err != nil {
+		return fmt.Errorf("conversion coordinates (%d, %d) to cell name failed: %w", colIndex, rowIndex, err)
+	}
+	if f.checkFunc != nil && f.errorStyleId != nil {
+		if checkErr := f.checkFunc(key, value); checkErr != nil {
+			if err := f.file.SetCellStyle(sheetName, cellAddr, cellAddr, *f.errorStyleId); err != nil {
+				return fmt.Errorf("failed to set cell style: %w", err)
+			}
+			// 添加批注
+			if err := f.file.AddComment(sheetName, excelize.Comment{
+				Cell:   cellAddr,
+				Author: "System",
+				Text:   fmt.Sprintf("%v", checkErr.Error()),
+			}); err != nil {
+				return fmt.Errorf("failed to add comment: %w", err)
+			}
+		}
+	}
+	if err := f.file.SetCellValue(sheetName, cellAddr, value); err != nil {
+		return fmt.Errorf("failed to set cell %s: %w", cellAddr, err)
+	}
+	return nil
+}
+
+func (f *File) iterateRows(sheetName string, keys []string, db *sql.DB, query string, args []any, sw *excelize.StreamWriter) error {
+	rows, err := db.Query(query, args...)
+	if err != nil {
+		return err
+	}
+	defer func(rows *sql.Rows) {
+		if err := rows.Close(); err != nil {
+			logger.Error("rows.Close() error: %w", err)
+		}
+	}(rows)
+	columns, err := rows.Columns()
+	if err != nil {
+		return err
+	}
+	columnMap := make(map[string]int)
+	for i, col := range columns {
+		columnMap[col] = i
+	}
+	for _, key := range keys {
+		if _, exists := columnMap[key]; !exists {
+			logger.Warn("column %s not exists", key)
+		}
+	}
+	values := make([]any, len(columns))
+	valuePtrs := make([]any, len(columns))
+	for i := range values {
+		valuePtrs[i] = &values[i]
+	}
+
+	rowIndex := 1
+	for rows.Next() {
+		rowIndex++
+		err = rows.Scan(valuePtrs...)
+		if err != nil {
+			return err
+		}
+		rowData := make(map[string]any, len(keys))
+		for _, key := range keys {
+			if idx, exists := columnMap[key]; exists {
+				rowData[key] = values[idx]
+			}
+		}
+		if err := f.writeRow(sheetName, rowIndex, keys, rowData, sw); err != nil {
+			return fmt.Errorf("write row %d err: %w", rowIndex, err)
+		}
+	}
+	return nil
+}
+
+// ================= 导出函数 =================
 
 // ExportFromDataMap 从数据集合导出数据
 //
@@ -177,33 +318,18 @@ func (f *File) WriteToCell(sheetName string, rowIndex int, colIndex int, value a
 // 返回:
 //   - error: 写入失败的错误信息
 func (f *File) ExportFromDataMap(sheetName string, titles []string, keys []string, values []map[string]any) error {
-	if err := f.checkParams(titles, keys); err != nil {
+	if err := f.checkParams(sheetName, titles, keys); err != nil {
 		return err
 	}
 
-	// 写入标题行
-	for i, title := range titles {
-		colIndex, err := excelize.ColumnNumberToName(i + 1)
-		if err != nil {
-			return err
-		}
-		_ = f.file.SetCellStr(sheetName, fmt.Sprintf("%s%d", colIndex, 1), title)
+	err := f.writeTitles(sheetName, titles, nil)
+	if err != nil {
+		return err
 	}
-	if f.titleStyleId != nil {
-		titleEndCell, err := excelize.ColumnNumberToName(len(titles))
-		if err != nil {
-			return err
-		}
-		_ = f.file.SetCellStyle(sheetName, "A1", fmt.Sprintf("%s%d", titleEndCell, 1), *f.errorStyleId)
-	}
-
-	// 写入数据
 	for i, value := range values {
-		for j, key := range keys {
-			err := f.WriteToCell(sheetName, i+2, j+1, value[key])
-			if err != nil {
-				return err
-			}
+		err = f.writeRow(sheetName, i+2, keys, value, nil)
+		if err != nil {
+			return err
 		}
 	}
 	return nil
@@ -222,62 +348,16 @@ func (f *File) ExportFromDataMap(sheetName string, titles []string, keys []strin
 // 返回:
 //   - error: 写入失败的错误信息
 func (f *File) ExportFromQuery(sheetName string, titles []string, keys []string, db *sql.DB, query string, args ...any) error {
-	if err := f.checkParams(titles, keys); err != nil {
+	if err := f.checkParams(sheetName, titles, keys); err != nil {
 		return err
 	}
 
-	// 写入标题行
-	for i, title := range titles {
-		colIndex, _ := excelize.ColumnNumberToName(i + 1)
-		_ = f.file.SetCellStr(sheetName, fmt.Sprintf("%s%d", colIndex, 1), title)
-	}
-	if f.titleStyleId != nil {
-		titleEndCell, err := excelize.ColumnNumberToName(len(titles))
-		if err != nil {
-			return err
-		}
-		_ = f.file.SetCellStyle(sheetName, "A1", fmt.Sprintf("%s%d", titleEndCell, 1), *f.errorStyleId)
-	}
-
-	// 写入数据
-	rows, err := db.Query(query, args...)
+	err := f.writeTitles(sheetName, titles, nil)
 	if err != nil {
 		return err
 	}
-	columns, err := rows.Columns()
-	if err != nil {
-		return err
-	}
-	columnMap := make(map[string]int)
-	for i, col := range columns {
-		columnMap[col] = i
-	}
-	for _, key := range keys {
-		if _, exists := columnMap[key]; !exists {
-			logger.Warn("column %s not exists", key)
-		}
-	}
-	values := make([]any, len(columns))
-	valuePtrs := make([]any, len(columns))
-	for i := range values {
-		valuePtrs[i] = &values[i]
-	}
 
-	rowIndex := 1
-	for rows.Next() {
-		rowIndex++
-		err = rows.Scan(valuePtrs...)
-		if err != nil {
-			return err
-		}
-		for i, key := range keys {
-			value := values[columnMap[key]]
-			if err := f.WriteToCellByCheck(sheetName, rowIndex, i+1, key, value); err != nil {
-				return err
-			}
-		}
-	}
-	return nil
+	return f.iterateRows(sheetName, keys, db, query, args, nil)
 }
 
 // ExportStreamFromDataMap 从数据源导出数据（流式，适合大规模数据）
@@ -291,7 +371,7 @@ func (f *File) ExportFromQuery(sheetName string, titles []string, keys []string,
 // 返回:
 //   - error: 写入失败的错误信息
 func (f *File) ExportStreamFromDataMap(sheetName string, titles []string, keys []string, values []map[string]any) error {
-	if err := f.checkParams(titles, keys); err != nil {
+	if err := f.checkParams(sheetName, titles, keys); err != nil {
 		return err
 	}
 	sw, err := f.file.NewStreamWriter(sheetName)
@@ -299,45 +379,19 @@ func (f *File) ExportStreamFromDataMap(sheetName string, titles []string, keys [
 		return err
 	}
 
-	// 写入标题行
-	titleData := make([]any, len(titles))
-	for i, title := range titles {
-		cell := excelize.Cell{Value: title}
-		if f.titleStyleId != nil {
-			cell.StyleID = *f.titleStyleId
-		}
-		titleData[i] = cell
-	}
-	err = sw.SetRow("A1", titleData)
+	err = f.writeTitles(sheetName, titles, sw)
 	if err != nil {
 		return err
 	}
-
-	// 按行写入数据
-	for i, row := range values {
-		rowIndex := 2 + i
-		cellIndex, err := excelize.CoordinatesToCellName(1, rowIndex)
+	for i, value := range values {
+		err = f.writeRow(sheetName, i+2, keys, value, sw)
 		if err != nil {
-			return err
-		}
-		data := make([]any, len(keys))
-		for j, key := range keys {
-			cell := excelize.Cell{Value: row[key]}
-			if f.checkFunc != nil && f.errorStyleId != nil {
-				if err := f.checkFunc(key, row[key]); err != nil {
-					cell.StyleID = *f.errorStyleId
-				}
-			}
-			data[j] = cell
-		}
-		// 写入一行
-		if err := sw.SetRow(cellIndex, data); err != nil {
 			return err
 		}
 	}
 
 	// 结束流式写入
-	if err := sw.Flush(); err != nil {
+	if err = sw.Flush(); err != nil {
 		return err
 	}
 	return nil
@@ -356,7 +410,7 @@ func (f *File) ExportStreamFromDataMap(sheetName string, titles []string, keys [
 // 返回:
 //   - error: 写入失败的错误信息
 func (f *File) ExportStreamFromQuery(sheetName string, titles []string, keys []string, db *sql.DB, query string, args ...any) error {
-	if err := f.checkParams(titles, keys); err != nil {
+	if err := f.checkParams(sheetName, titles, keys); err != nil {
 		return err
 	}
 	sw, err := f.file.NewStreamWriter(sheetName)
@@ -364,73 +418,17 @@ func (f *File) ExportStreamFromQuery(sheetName string, titles []string, keys []s
 		return err
 	}
 
-	// 写入标题行
-	titleData := make([]any, len(titles))
-	for i, title := range titles {
-		cell := excelize.Cell{Value: title}
-		if f.titleStyleId != nil {
-			cell.StyleID = *f.titleStyleId
-		}
-		titleData[i] = cell
-	}
-	err = sw.SetRow("A1", titleData)
-	if err != nil {
+	if err = f.writeTitles(sheetName, titles, sw); err != nil {
 		return err
 	}
 
-	rows, err := db.Query(query, args...)
+	err = f.iterateRows(sheetName, keys, db, query, args, sw)
 	if err != nil {
 		return err
-	}
-	columns, err := rows.Columns()
-	if err != nil {
-		return err
-	}
-	columnMap := make(map[string]int)
-	for i, col := range columns {
-		columnMap[col] = i
-	}
-	for _, key := range keys {
-		if _, exists := columnMap[key]; !exists {
-			logger.Warn("column %s not exists", key)
-		}
-	}
-	values := make([]any, len(columns))
-	valuePtrs := make([]any, len(columns))
-	for i := range values {
-		valuePtrs[i] = &values[i]
-	}
-
-	// 按行写入数据
-	rowIndex := 1
-	for rows.Next() {
-		rowIndex++
-		cellIndex, err := excelize.CoordinatesToCellName(1, rowIndex)
-		if err != nil {
-			return err
-		}
-		err = rows.Scan(valuePtrs...)
-		if err != nil {
-			return err
-		}
-		data := make([]any, len(keys))
-		for j, key := range keys {
-			cell := excelize.Cell{Value: values[columnMap[key]]}
-			if f.checkFunc != nil && f.errorStyleId != nil {
-				if err := f.checkFunc(key, values[columnMap[key]]); err != nil {
-					cell.StyleID = *f.errorStyleId
-				}
-			}
-			data[j] = cell
-		}
-		// 写入一行
-		if err := sw.SetRow(cellIndex, data); err != nil {
-			return err
-		}
 	}
 
 	// 结束流式写入
-	if err := sw.Flush(); err != nil {
+	if err = sw.Flush(); err != nil {
 		return err
 	}
 	return nil
