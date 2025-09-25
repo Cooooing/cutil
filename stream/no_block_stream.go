@@ -35,25 +35,122 @@ func newNoBlockStream[T any](ctx context.Context) *NoBlockStream[T] {
 	}
 }
 
-// 中间操作
+// -------------------- 源操作：非阻塞流 --------------------
 
-func (p *NoBlockStream[T]) Map(action common.UnaryOperator[T]) Stream[T] {
-	in, out := p.initOp()
-	p.wg.Add(p.parallelGoroutines)
+// OfNoBlock 从指定元素创建一个流（有限流）
+func OfNoBlock[T any](ctx context.Context, values ...T) Stream[T] {
+	if len(values) == 0 {
+		return EmptyNoBlock[T](ctx) // 创建一个空流
+	}
+	p := newNoBlockStream[T](ctx)
+	out := make(chan T, len(values)) // 使用缓冲通道优化性能
+	p.out <- out
+	go func() {
+		defer close(out)
+		for _, v := range values {
+			select {
+			case <-p.ctx.Done():
+				return
+			case out <- v:
+			}
+		}
+	}()
+	return p
+}
+
+// OfChanNoBlock 从指定通道创建一个流（无限流）
+func OfChanNoBlock[T any](ctx context.Context, ins ...chan T) Stream[T] {
+	p := newNoBlockStream[T](ctx)
+	out := make(chan T, 1)
+	p.out <- out
+	go func() {
+		defer close(out)
+		var wg sync.WaitGroup
+		for _, in := range ins {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				for v := range in {
+					select {
+					case <-p.ctx.Done():
+						return
+					case out <- v:
+					}
+				}
+			}()
+		}
+		wg.Wait()
+	}()
+	return p
+}
+
+// GenerateNoBlock 返回一个无限流，由 Supplier 提供的元素组成
+func GenerateNoBlock[T any](ctx context.Context, s common.Supplier[T]) Stream[T] {
+	p := newNoBlockStream[T](ctx)
+	out := make(chan T, 1)
+	p.out <- out
+	go func() {
+		defer close(out)
+		for {
+			select {
+			case <-p.ctx.Done():
+				return
+			case out <- s():
+			}
+		}
+	}()
+	return p
+}
+
+// ConcatNoBlock 返回一个流，该流由给定的多个流中的所有元素组成。
+func ConcatNoBlock[T any](ctx context.Context, streams ...Stream[T]) Stream[T] {
+	if len(streams) == 0 {
+		return EmptyNoBlock[T](ctx) // 返回空流
+	}
+	p := newNoBlockStream[T](ctx)
+	out := make(chan T, 1)
+	p.out <- out
+	go func() {
+		defer close(out)
+		for _, s := range streams {
+			for v := range s.Iterator() {
+				select {
+				case <-p.ctx.Done():
+					return
+				case out <- v:
+				}
+			}
+		}
+	}()
+	return p
+}
+
+// EmptyNoBlock 创建一个空流
+func EmptyNoBlock[T any](ctx context.Context) Stream[T] {
+	stream := newNoBlockStream[T](ctx)
+	stream.out <- stream.closeChan()
+	return stream
+}
+
+// --------------------- 中间操作 ---------------------
+
+func (s *NoBlockStream[T]) Map(action common.UnaryOperator[T]) Stream[T] {
+	in, out := s.initOp()
+	s.wg.Add(s.parallelGoroutines)
 	var currentWg sync.WaitGroup
-	currentWg.Add(p.parallelGoroutines)
+	currentWg.Add(s.parallelGoroutines)
 	go func() {
 		currentWg.Wait()
 		close(out)
 	}()
-	for i := 0; i < p.parallelGoroutines; i++ {
+	for i := 0; i < s.parallelGoroutines; i++ {
 		go func() {
-			defer p.wg.Done()
+			defer s.wg.Done()
 			defer currentWg.Done()
 			for {
 				select {
-				case <-p.ctx.Done():
-					p.close(p.ctx.Err())
+				case <-s.ctx.Done():
+					s.close(s.ctx.Err())
 					return
 				case v, ok := <-in:
 					if !ok {
@@ -64,54 +161,54 @@ func (p *NoBlockStream[T]) Map(action common.UnaryOperator[T]) Stream[T] {
 			}
 		}()
 	}
-	return p
+	return s
 }
 
-func (p *NoBlockStream[T]) Peek(action common.Consumer[T]) Stream[T] {
-	in, out := p.initOp()
-	p.wg.Add(p.parallelGoroutines)
+func (s *NoBlockStream[T]) Peek(action common.Consumer[T]) Stream[T] {
+	in, out := s.initOp()
+	s.wg.Add(s.parallelGoroutines)
 	var currentWg sync.WaitGroup
-	currentWg.Add(p.parallelGoroutines)
+	currentWg.Add(s.parallelGoroutines)
 	go func() {
 		currentWg.Wait()
 		close(out)
 	}()
-	for i := 0; i < p.parallelGoroutines; i++ {
+	for i := 0; i < s.parallelGoroutines; i++ {
 		go func() {
-			defer p.wg.Done()
+			defer s.wg.Done()
 			defer currentWg.Done()
 			for v := range in {
 				action(v)
 				select {
-				case <-p.ctx.Done():
-					p.close(p.ctx.Err())
+				case <-s.ctx.Done():
+					s.close(s.ctx.Err())
 					return
 				case out <- v:
 				}
 			}
 		}()
 	}
-	return p
+	return s
 }
 
-func (p *NoBlockStream[T]) Filter(predicate common.Predicate[T]) Stream[T] {
-	in, out := p.initOp()
-	p.wg.Add(p.parallelGoroutines)
+func (s *NoBlockStream[T]) Filter(predicate common.Predicate[T]) Stream[T] {
+	in, out := s.initOp()
+	s.wg.Add(s.parallelGoroutines)
 	var currentWg sync.WaitGroup
-	currentWg.Add(p.parallelGoroutines)
+	currentWg.Add(s.parallelGoroutines)
 	go func() {
 		currentWg.Wait()
 		close(out)
 	}()
-	for i := 0; i < p.parallelGoroutines; i++ {
+	for i := 0; i < s.parallelGoroutines; i++ {
 		go func() {
-			defer p.wg.Done()
+			defer s.wg.Done()
 			defer currentWg.Done()
 			for v := range in {
 				if predicate(v) {
 					select {
-					case <-p.ctx.Done():
-						p.close(p.ctx.Err())
+					case <-s.ctx.Done():
+						s.close(s.ctx.Err())
 						return
 					case out <- v:
 					}
@@ -119,14 +216,14 @@ func (p *NoBlockStream[T]) Filter(predicate common.Predicate[T]) Stream[T] {
 			}
 		}()
 	}
-	return p
+	return s
 }
 
-func (p *NoBlockStream[T]) Skip(n int) Stream[T] {
-	in, out := p.initOp()
-	p.wg.Add(1)
+func (s *NoBlockStream[T]) Skip(n int) Stream[T] {
+	in, out := s.initOp()
+	s.wg.Add(1)
 	go func() {
-		defer p.wg.Done()
+		defer s.wg.Done()
 		defer close(out)
 		count := 0
 		for v := range in {
@@ -135,20 +232,23 @@ func (p *NoBlockStream[T]) Skip(n int) Stream[T] {
 				continue
 			}
 			select {
-			case <-p.ctx.Done():
-				p.close(p.ctx.Err())
+			case <-s.ctx.Done():
+				s.close(s.ctx.Err())
 				return
 			case out <- v:
 			}
 		}
 	}()
-	return p
+	return s
 }
-func (p *NoBlockStream[T]) Limit(maxSize int) Stream[T] {
-	in, out := p.initOp()
-	p.wg.Add(1)
+func (s *NoBlockStream[T]) Limit(maxSize int) Stream[T] {
+	if maxSize <= 0 {
+		return EmptyBlock[T](s.ctx)
+	}
+	in, out := s.initOp()
+	s.wg.Add(1)
 	go func() {
-		defer p.wg.Done()
+		defer s.wg.Done()
 		defer close(out)
 		count := 0
 		for v := range in {
@@ -157,51 +257,51 @@ func (p *NoBlockStream[T]) Limit(maxSize int) Stream[T] {
 				break
 			}
 			select {
-			case <-p.ctx.Done():
-				p.close(p.ctx.Err())
+			case <-s.ctx.Done():
+				s.close(s.ctx.Err())
 				return
 			case out <- v:
 			}
 		}
 	}()
-	return p
+	return s
 }
 
-func (p *NoBlockStream[T]) Distinct() Stream[T] {
-	in, out := p.initOp()
-	p.wg.Add(1)
+func (s *NoBlockStream[T]) Distinct() Stream[T] {
+	in, out := s.initOp()
+	s.wg.Add(1)
 	go func() {
-		defer p.wg.Done()
+		defer s.wg.Done()
 		defer close(out)
 		seen := make(map[any]struct{}) // 使用 map 去重
 		for v := range in {
 			if _, exists := seen[v]; !exists {
 				seen[v] = struct{}{}
 				select {
-				case <-p.ctx.Done():
-					p.close(p.ctx.Err())
+				case <-s.ctx.Done():
+					s.close(s.ctx.Err())
 					return
 				case out <- v:
 				}
 			}
 		}
 	}()
-	return p
+	return s
 }
 
 // Sorted 排序操作
-func (p *NoBlockStream[T]) Sorted(comparator common.Comparator[T]) Stream[T] {
-	in, out := p.initOp()
-	p.wg.Add(1)
+func (s *NoBlockStream[T]) Sorted(comparator common.Comparator[T]) Stream[T] {
+	in, out := s.initOp()
+	s.wg.Add(1)
 	go func() {
-		defer p.wg.Done()
+		defer s.wg.Done()
 		defer close(out)
 		elements := make([]T, 0)
 		over := false
 		for {
 			select {
-			case <-p.ctx.Done():
-				p.close(p.ctx.Err())
+			case <-s.ctx.Done():
+				s.close(s.ctx.Err())
 				return
 			case v, ok := <-in:
 				if !ok {
@@ -220,167 +320,167 @@ func (p *NoBlockStream[T]) Sorted(comparator common.Comparator[T]) Stream[T] {
 		})
 		for _, v := range elements {
 			select {
-			case <-p.ctx.Done():
-				p.close(p.ctx.Err())
+			case <-s.ctx.Done():
+				s.close(s.ctx.Err())
 				return
 			case out <- v:
 			}
 		}
 	}()
-	return p
+	return s
 }
 
-// 终止操作
+// --------------------- 终止操作 ---------------------
 
-func (p *NoBlockStream[T]) ForEach(action common.Consumer[T]) error {
-	in := p.initTerminalOp()
-	if p.err != nil {
-		return p.err
+func (s *NoBlockStream[T]) ForEach(action common.Consumer[T]) error {
+	in := s.initTerminalOp()
+	if s.err != nil {
+		return s.err
 	}
 	for {
 		select {
-		case <-p.ctx.Done():
-			p.close(p.ctx.Err())
-			return p.ctx.Err()
+		case <-s.ctx.Done():
+			s.close(s.ctx.Err())
+			return s.ctx.Err()
 		case v, ok := <-in:
 			if !ok {
-				p.close(p.err)
-				return p.err
+				s.close(s.err)
+				return s.err
 			}
 			action(v)
 		}
 	}
 }
 
-func (p *NoBlockStream[T]) ForEachOrdered(comparator common.Comparator[T], action common.Consumer[T]) error {
-	p.Sorted(comparator)
-	return p.ForEach(action)
+func (s *NoBlockStream[T]) ForEachOrdered(comparator common.Comparator[T], action common.Consumer[T]) error {
+	s.Sorted(comparator)
+	return s.ForEach(action)
 }
 
-func (p *NoBlockStream[T]) AnyMatch(predicate common.Predicate[T]) (bool, error) {
-	in := p.initTerminalOp()
-	if p.err != nil {
-		return false, p.err
+func (s *NoBlockStream[T]) AnyMatch(predicate common.Predicate[T]) (bool, error) {
+	in := s.initTerminalOp()
+	if s.err != nil {
+		return false, s.err
 	}
 	for {
 		select {
-		case <-p.ctx.Done():
-			p.close(p.ctx.Err())
-			return false, p.ctx.Err()
+		case <-s.ctx.Done():
+			s.close(s.ctx.Err())
+			return false, s.ctx.Err()
 		case v, ok := <-in:
 			if !ok {
-				p.close(p.err)
-				return false, p.err
+				s.close(s.err)
+				return false, s.err
 			}
-			return predicate(v), p.err
+			return predicate(v), s.err
 		}
 	}
 }
 
-func (p *NoBlockStream[T]) AllMatch(predicate common.Predicate[T]) (bool, error) {
-	in := p.initTerminalOp()
-	if p.err != nil {
-		return false, p.err
+func (s *NoBlockStream[T]) AllMatch(predicate common.Predicate[T]) (bool, error) {
+	in := s.initTerminalOp()
+	if s.err != nil {
+		return false, s.err
 	}
 	for {
 		select {
-		case <-p.ctx.Done():
-			p.close(p.ctx.Err())
-			return true, p.ctx.Err()
+		case <-s.ctx.Done():
+			s.close(s.ctx.Err())
+			return true, s.ctx.Err()
 		case v, ok := <-in:
 			if !ok {
-				p.close(p.err)
-				return true, p.err
+				s.close(s.err)
+				return true, s.err
 			}
 			if !predicate(v) {
-				p.close(p.err)
-				return false, p.err
+				s.close(s.err)
+				return false, s.err
 			}
 		}
 	}
 }
 
-func (p *NoBlockStream[T]) NoneMatch(predicate common.Predicate[T]) (bool, error) {
-	in := p.initTerminalOp()
-	if p.err != nil {
-		return false, p.err
+func (s *NoBlockStream[T]) NoneMatch(predicate common.Predicate[T]) (bool, error) {
+	in := s.initTerminalOp()
+	if s.err != nil {
+		return false, s.err
 	}
 	for {
 		select {
-		case <-p.ctx.Done():
-			p.close(p.ctx.Err())
-			return true, p.ctx.Err()
+		case <-s.ctx.Done():
+			s.close(s.ctx.Err())
+			return true, s.ctx.Err()
 		case v, ok := <-in:
 			if !ok {
-				p.close(p.err)
-				return true, p.err
+				s.close(s.err)
+				return true, s.err
 			}
 			if predicate(v) {
-				p.close(p.err)
-				return false, p.err
+				s.close(s.err)
+				return false, s.err
 			}
 		}
 	}
 }
 
-func (p *NoBlockStream[T]) ToArray() ([]T, error) {
-	in := p.initTerminalOp()
-	if p.err != nil {
-		return nil, p.err
+func (s *NoBlockStream[T]) ToArray() ([]T, error) {
+	in := s.initTerminalOp()
+	if s.err != nil {
+		return nil, s.err
 	}
 	array := make([]T, 0)
 	for {
 		select {
-		case <-p.ctx.Done():
-			p.close(p.ctx.Err())
-			return array, p.ctx.Err()
+		case <-s.ctx.Done():
+			s.close(s.ctx.Err())
+			return array, s.ctx.Err()
 		case v, ok := <-in:
 			if !ok {
-				p.close(p.err)
-				return array, p.err
+				s.close(s.err)
+				return array, s.err
 			}
 			array = append(array, v)
 		}
 	}
 }
 
-func (p *NoBlockStream[T]) Count() (int, error) {
-	in := p.initTerminalOp()
-	if p.err != nil {
-		return 0, p.err
+func (s *NoBlockStream[T]) Count() (int, error) {
+	in := s.initTerminalOp()
+	if s.err != nil {
+		return 0, s.err
 	}
 	count := 0
 	for {
 		select {
-		case <-p.ctx.Done():
-			p.close(p.ctx.Err())
-			return count, p.ctx.Err()
+		case <-s.ctx.Done():
+			s.close(s.ctx.Err())
+			return count, s.ctx.Err()
 		case _, ok := <-in:
 			if !ok {
-				p.close(p.err)
-				return count, p.err
+				s.close(s.err)
+				return count, s.err
 			}
 			count++
 		}
 	}
 }
 
-func (p *NoBlockStream[T]) Min(comparator common.Comparator[T]) (T, error) {
-	in := p.initTerminalOp()
+func (s *NoBlockStream[T]) Min(comparator common.Comparator[T]) (T, error) {
+	in := s.initTerminalOp()
 	var zero T
-	if p.err != nil {
-		return zero, p.err
+	if s.err != nil {
+		return zero, s.err
 	}
 	var m T
 	for {
 		select {
-		case <-p.ctx.Done():
-			p.close(p.ctx.Err())
-			return zero, p.ctx.Err()
+		case <-s.ctx.Done():
+			s.close(s.ctx.Err())
+			return zero, s.ctx.Err()
 		case v, ok := <-in:
 			if !ok {
-				p.close(p.err)
-				return m, p.err
+				s.close(s.err)
+				return m, s.err
 			}
 			if comparator(v, m) < 0 {
 				m = v
@@ -389,22 +489,22 @@ func (p *NoBlockStream[T]) Min(comparator common.Comparator[T]) (T, error) {
 	}
 }
 
-func (p *NoBlockStream[T]) Max(comparator common.Comparator[T]) (T, error) {
-	in := p.initTerminalOp()
+func (s *NoBlockStream[T]) Max(comparator common.Comparator[T]) (T, error) {
+	in := s.initTerminalOp()
 	var zero T
-	if p.err != nil {
-		return zero, p.err
+	if s.err != nil {
+		return zero, s.err
 	}
 	var m T
 	for {
 		select {
-		case <-p.ctx.Done():
-			p.close(p.ctx.Err())
-			return zero, p.ctx.Err()
+		case <-s.ctx.Done():
+			s.close(s.ctx.Err())
+			return zero, s.ctx.Err()
 		case v, ok := <-in:
 			if !ok {
-				p.close(p.err)
-				return m, p.err
+				s.close(s.err)
+				return m, s.err
 			}
 			if comparator(v, m) > 0 {
 				m = v
@@ -413,157 +513,157 @@ func (p *NoBlockStream[T]) Max(comparator common.Comparator[T]) (T, error) {
 	}
 }
 
-func (p *NoBlockStream[T]) FindFirst() (T, error) {
-	in := p.initTerminalOp()
+func (s *NoBlockStream[T]) FindFirst() (T, error) {
+	in := s.initTerminalOp()
 	var m T
-	if p.err != nil {
-		return m, p.err
+	if s.err != nil {
+		return m, s.err
 	}
 	for {
 		select {
-		case <-p.ctx.Done():
-			p.close(p.ctx.Err())
-			return m, p.ctx.Err()
+		case <-s.ctx.Done():
+			s.close(s.ctx.Err())
+			return m, s.ctx.Err()
 		case v, ok := <-in:
 			if !ok {
-				p.close(p.err)
-				return m, p.err
+				s.close(s.err)
+				return m, s.err
 			}
-			return v, p.err
+			return v, s.err
 		}
 	}
 }
-func (p *NoBlockStream[T]) FindAny() (T, error) {
-	in := p.initTerminalOp()
+func (s *NoBlockStream[T]) FindAny() (T, error) {
+	in := s.initTerminalOp()
 	var m T
-	if p.err != nil {
-		return m, p.err
+	if s.err != nil {
+		return m, s.err
 	}
 	for {
 		select {
-		case <-p.ctx.Done():
-			p.close(p.ctx.Err())
-			return m, p.ctx.Err()
+		case <-s.ctx.Done():
+			s.close(s.ctx.Err())
+			return m, s.ctx.Err()
 		case v, ok := <-in:
 			if !ok {
-				p.close(p.err)
-				return m, p.err
+				s.close(s.err)
+				return m, s.err
 			}
-			return v, p.err
+			return v, s.err
 		}
 	}
 }
 
-func (p *NoBlockStream[T]) Reduce(accumulator common.BinaryOperator[T]) (T, error) {
-	in := p.initTerminalOp()
+func (s *NoBlockStream[T]) Reduce(accumulator common.BinaryOperator[T]) (T, error) {
+	in := s.initTerminalOp()
 	var result T
 	for {
 		select {
-		case <-p.ctx.Done():
+		case <-s.ctx.Done():
 			var zero T
-			return zero, p.ctx.Err()
+			return zero, s.ctx.Err()
 		case v, ok := <-in:
 			if !ok {
-				p.close(p.err)
-				return result, p.err
+				s.close(s.err)
+				return result, s.err
 			}
 			result = accumulator(result, v)
 		}
 	}
 }
 
-func (p *NoBlockStream[T]) ReduceByDefault(identity T, accumulator common.BinaryOperator[T]) (T, error) {
-	in := p.initTerminalOp()
+func (s *NoBlockStream[T]) ReduceByDefault(identity T, accumulator common.BinaryOperator[T]) (T, error) {
+	in := s.initTerminalOp()
 	result := identity
 	for {
 		select {
-		case <-p.ctx.Done():
+		case <-s.ctx.Done():
 			var zero T
-			return zero, p.ctx.Err()
+			return zero, s.ctx.Err()
 		case v, ok := <-in:
 			if !ok {
-				p.close(p.err)
-				return result, p.err
+				s.close(s.err)
+				return result, s.err
 			}
 			result = accumulator(result, v)
 		}
 	}
 }
 
-func (p *NoBlockStream[T]) Iterator() chan T {
-	p.linkedOrConsumed = true
-	return <-p.out
+func (s *NoBlockStream[T]) Iterator() chan T {
+	s.linkedOrConsumed = true
+	return <-s.out
 }
 
-func (p *NoBlockStream[T]) IsParallel() bool {
-	return p.parallelGoroutines != 1
+func (s *NoBlockStream[T]) IsParallel() bool {
+	return s.parallelGoroutines != 1
 }
 
-func (p *NoBlockStream[T]) GetParallelGoroutines() int {
-	return p.parallelGoroutines
+func (s *NoBlockStream[T]) GetParallelGoroutines() int {
+	return s.parallelGoroutines
 }
 
-func (p *NoBlockStream[T]) Parallel(n int) Stream[T] {
+func (s *NoBlockStream[T]) Parallel(n int) Stream[T] {
 	if n <= 0 {
-		p.close(errors.New(fmt.Sprintf("parallelism must be positive,but now is %s", strconv.Itoa(n))))
+		s.close(errors.New(fmt.Sprintf("parallelism must be positive,but now is %s", strconv.Itoa(n))))
 	}
-	if p.hasOperations {
-		p.close(errors.New("parallel operation must be the first operation"))
+	if s.hasOperations {
+		s.close(errors.New("parallel operation must be the first operation"))
 	}
-	p.hasOperations = true
-	p.parallelGoroutines = n
-	return p
+	s.hasOperations = true
+	s.parallelGoroutines = n
+	return s
 }
 
-// 其他辅助函数
+// --------------------- 辅助函数 ---------------------
 
-func (p *NoBlockStream[T]) getCtx() context.Context {
-	return p.ctx
+func (s *NoBlockStream[T]) getCtx() context.Context {
+	return s.ctx
 }
 
 // initOp 初始化中间操作
-func (p *NoBlockStream[T]) initOp() (chan T, chan T) {
-	if p.linkedOrConsumed {
-		p.close(errors.New("stream already operated upon or closed"))
+func (s *NoBlockStream[T]) initOp() (chan T, chan T) {
+	if s.linkedOrConsumed {
+		s.close(errors.New("stream already operated upon or closed"))
 	}
-	p.hasOperations = true
-	in, ok := <-p.out
+	s.hasOperations = true
+	in, ok := <-s.out
 	if !ok {
-		return p.closeChan(), p.closeChan()
+		return s.closeChan(), s.closeChan()
 	}
-	out := make(chan T, p.parallelGoroutines)
-	p.out <- out
+	out := make(chan T, s.parallelGoroutines)
+	s.out <- out
 	return in, out
 }
 
 // initTerminalOp 初始化终端操作
-func (p *NoBlockStream[T]) initTerminalOp() chan T {
-	if p.linkedOrConsumed {
-		p.close(errors.New("stream already operated upon or closed"))
+func (s *NoBlockStream[T]) initTerminalOp() chan T {
+	if s.linkedOrConsumed {
+		s.close(errors.New("stream already operated upon or closed"))
 	}
-	p.hasOperations = true
-	in, ok := <-p.out
+	s.hasOperations = true
+	in, ok := <-s.out
 	if !ok {
-		return p.closeChan()
+		return s.closeChan()
 	}
 	return in
 }
 
-func (p *NoBlockStream[T]) closeChan() chan T {
+func (s *NoBlockStream[T]) closeChan() chan T {
 	ch := make(chan T)
 	close(ch)
 	return ch
 }
 
-func (p *NoBlockStream[T]) close(err error) {
+func (s *NoBlockStream[T]) close(err error) {
 	go func() {
-		p.closeOnce.Do(func() {
+		s.closeOnce.Do(func() {
 			if err != nil {
-				p.err = err
-				p.linkedOrConsumed = true
-				p.cancel()  // 取消所有操作
-				p.wg.Wait() // 等待所有协程结束
-				close(p.out)
+				s.err = err
+				s.linkedOrConsumed = true
+				s.cancel()  // 取消所有操作
+				s.wg.Wait() // 等待所有协程结束
+				close(s.out)
 			}
 		})
 	}()

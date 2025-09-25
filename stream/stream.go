@@ -73,195 +73,138 @@ type Stream[T any] interface {
 	Parallel(n int) Stream[T]
 }
 
-// 创建流（源操作）
+// 流操作，返回一个流或结果，但流中数据或结果类型发生改变。（解决go中方法不能增加泛型的问题）
 
-// Of 从指定元素创建一个流（有限流）
-func Of[T any](ctx context.Context, values ...T) Stream[T] {
-	if len(values) == 0 {
-		return Empty[T](ctx) // 创建一个空流
-	}
-	p := newNoBlockStream[T](ctx)
-	out := make(chan T, len(values)) // 使用缓冲通道优化性能
-	p.out <- out
-	go func() {
-		defer close(out)
-		for _, v := range values {
-			select {
-			case <-p.ctx.Done():
-				return
-			case out <- v:
-			}
+func Map[T any, R any](stream Stream[T], mapper common.Function[T, R]) Stream[R] {
+	switch s := stream.(type) {
+	case *BlockStream[T]:
+		arr, _ := s.ToArray()
+		newArr := make([]R, 0, len(arr))
+		for _, v := range arr {
+			newArr = append(newArr, mapper(v))
 		}
-	}()
-	return p
+		return newBlockStream(s.getCtx(), newArr)
+
+	default: // 非阻塞流
+		in := stream.Iterator()
+		p := newNoBlockStream[R](stream.getCtx())
+		out := make(chan R, 1)
+		p.out <- out
+		go func() {
+			defer close(out)
+			for v := range in {
+				select {
+				case <-p.ctx.Done():
+					return
+				case out <- mapper(v):
+				}
+			}
+		}()
+		return p
+	}
 }
 
-// OfChan 从指定通道创建一个流（无限流）
-func OfChan[T any](ctx context.Context, ins ...chan T) Stream[T] {
-	p := newNoBlockStream[T](ctx)
-	out := make(chan T, 1)
-	p.out <- out
-	go func() {
-		defer close(out)
-		var wg sync.WaitGroup
-		for _, in := range ins {
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
-				for v := range in {
+func FlatMap[T any, R any](stream Stream[T], mapper common.Function[T, Stream[R]]) Stream[R] {
+	switch s := stream.(type) {
+	case *BlockStream[T]:
+		arr, _ := s.ToArray()
+		newArr := make([]R, 0)
+		for _, v := range arr {
+			mapped := mapper(v)
+			subArr, _ := mapped.ToArray()
+			newArr = append(newArr, subArr...)
+		}
+		return newBlockStream(s.getCtx(), newArr)
+
+	default: // 非阻塞流
+		in := stream.Iterator()
+		p := newNoBlockStream[R](stream.getCtx())
+		out := make(chan R, 1)
+		p.out <- out
+		go func() {
+			defer close(out)
+			for v := range in {
+				mapped := mapper(v)
+				for mv := range mapped.Iterator() {
 					select {
 					case <-p.ctx.Done():
 						return
-					case out <- v:
+					case out <- mv:
 					}
 				}
-			}()
-		}
-		wg.Wait()
-	}()
-	return p
-}
-
-// Generate 返回一个无限流，由 Supplier 提供的元素组成
-func Generate[T any](ctx context.Context, s common.Supplier[T]) Stream[T] {
-	p := newNoBlockStream[T](ctx)
-	out := make(chan T, 1)
-	p.out <- out
-	go func() {
-		defer close(out)
-		for {
-			select {
-			case <-p.ctx.Done():
-				return
-			case out <- s():
 			}
-		}
-	}()
-	return p
-}
-
-// Concat 返回一个流，该流由给定的多个流中的所有元素组成。
-func Concat[T any](ctx context.Context, streams ...Stream[T]) Stream[T] {
-	if len(streams) == 0 {
-		return Empty[T](ctx) // 返回空流
-	}
-	p := newNoBlockStream[T](ctx)
-	out := make(chan T, 1)
-	p.out <- out
-	go func() {
-		defer close(out)
-		for _, s := range streams {
-			for v := range s.Iterator() {
-				select {
-				case <-p.ctx.Done():
-					return
-				case out <- v:
-				}
-			}
-		}
-	}()
-	return p
-}
-
-// Empty 创建一个空流
-func Empty[T any](ctx context.Context) Stream[T] {
-	stream := newNoBlockStream[T](ctx)
-	stream.out <- stream.closeChan()
-	return stream
-}
-
-// 流操作，返回一个流或结果，但流中数据或结果类型发生改变。（解决go中方法不能增加泛型的问题）
-
-// Map 返回一个流，该流由将给定函数应用于该流元素的结果组成。
-func Map[T any, R any](stream Stream[T], mapper common.Function[T, R]) Stream[R] {
-	in := stream.Iterator()
-	p := newNoBlockStream[R](stream.getCtx())
-	out := make(chan R, 1)
-	p.out <- out
-	go func() {
-		defer close(out)
-		for v := range in {
-			select {
-			case <-p.ctx.Done():
-				return
-			case out <- mapper(v):
-			}
-		}
-	}()
-	return p
-}
-
-// FlatMap 返回一个流，该流由将此流的每个元素替换为映射流的内容的结果组成，该映射流是通过将提供的映射函数应用于每个元素而生成的。每个映射的流在其内容被放入该流后都会被关闭。（如果映射的流为null，则使用空流。）
-func FlatMap[T any, R any](stream Stream[T], mapper common.Function[T, Stream[R]]) Stream[R] {
-	in := stream.Iterator()
-	p := newNoBlockStream[R](stream.getCtx())
-	out := make(chan R, 1)
-	p.out <- out
-	go func() {
-		defer close(out)
-		for v := range in {
-			mappedStream := mapper(v)
-			for mappedValue := range mappedStream.Iterator() {
-				select {
-				case <-p.ctx.Done():
-					return
-				case out <- mappedValue:
-				}
-			}
-		}
-	}()
-	return p
-}
-
-// Reduce 将流中的元素通过累积函数聚合为单一结果。
-// identity: 归约的初始值，即使流为空也返回此值。
-// accumulator: 累积函数，定义如何将流元素与中间结果合并。
-// combiner: 合并函数，定义如何合并并行流中的子结果。
-func Reduce[T any, R any](stream Stream[T], identity R, accumulator common.BiFunction[T, R], combiner common.BinaryOperator[R]) (R, error) {
-	var err error
-	result := identity
-	if stream.IsParallel() {
-		// 并行流逻辑
-		subResults := make(chan R, stream.GetParallelGoroutines()) // 用于收集各子流的归约结果
-		iterator := stream.Iterator()
-		var currentWg sync.WaitGroup
-		currentWg.Add(stream.GetParallelGoroutines())
-		go func() {
-			currentWg.Wait()
-			stream.close(nil)
-			close(subResults)
 		}()
-		for i := 0; i < stream.GetParallelGoroutines(); i++ {
-			go func() {
-				defer currentWg.Done()
-				var localResult R
-				for v := range iterator {
-					localResult = accumulator(v, localResult)
-				}
-				subResults <- localResult
-			}()
-		}
-		finalResult := identity
-		for r := range subResults {
-			finalResult = combiner(finalResult, r)
-		}
-		return finalResult, nil
-	} else {
-		// 顺序流逻辑
-		err = stream.ForEach(func(item T) {
-			result = accumulator(item, result)
-		})
+		return p
 	}
-	return result, err
 }
 
-// GroupBy 将流中的元素根据给定分类函数进行分组，并返回一个map，该map的键是分类函数的返回值，值是包含该键的元素组成的列表。
+func Reduce[T any, R any](stream Stream[T], identity R,
+	accumulator common.BiFunction[T, R],
+	combiner common.BinaryOperator[R]) (R, error) {
+
+	switch s := stream.(type) {
+	case *BlockStream[T]:
+		arr, _ := s.ToArray()
+		result := identity
+		for _, v := range arr {
+			result = accumulator(v, result)
+		}
+		return result, nil
+
+	default: // 非阻塞流
+		var err error
+		result := identity
+		if stream.IsParallel() {
+			subResults := make(chan R, stream.GetParallelGoroutines())
+			iterator := stream.Iterator()
+			var wg sync.WaitGroup
+			wg.Add(stream.GetParallelGoroutines())
+			go func() {
+				wg.Wait()
+				stream.close(nil)
+				close(subResults)
+			}()
+			for i := 0; i < stream.GetParallelGoroutines(); i++ {
+				go func() {
+					defer wg.Done()
+					var localResult R
+					for v := range iterator {
+						localResult = accumulator(v, localResult)
+					}
+					subResults <- localResult
+				}()
+			}
+			finalResult := identity
+			for r := range subResults {
+				finalResult = combiner(finalResult, r)
+			}
+			return finalResult, nil
+		} else {
+			err = stream.ForEach(func(item T) {
+				result = accumulator(item, result)
+			})
+		}
+		return result, err
+	}
+}
+
 func GroupBy[T any, K comparable](stream Stream[T], classifier common.Function[T, K]) (map[K][]T, error) {
-	var err error
-	result := make(map[K][]T)
-	err = stream.ForEach(func(item T) {
-		key := classifier(item)
-		result[key] = append(result[key], item)
-	})
-	return result, err
+	switch s := stream.(type) {
+	case *BlockStream[T]:
+		arr, _ := s.ToArray()
+		result := make(map[K][]T)
+		for _, v := range arr {
+			key := classifier(v)
+			result[key] = append(result[key], v)
+		}
+		return result, nil
+
+	default:
+		result := make(map[K][]T)
+		err := stream.ForEach(func(item T) {
+			key := classifier(item)
+			result[key] = append(result[key], item)
+		})
+		return result, err
+	}
 }

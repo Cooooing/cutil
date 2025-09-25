@@ -8,65 +8,101 @@ import (
 	"github.com/Cooooing/cutil/common"
 )
 
-// BlockingStream 阻塞流实现，内部直接存储在 slice 中。
-type BlockingStream[T any] struct {
+// BlockStream 阻塞流实现，内部直接存储在 slice 中。
+type BlockStream[T any] struct {
 	ctx      context.Context
 	elements []T
 	parallel bool
 	workers  int
 }
 
-func newBlockingStream[T any](ctx context.Context, elems []T) *BlockingStream[T] {
-	return &BlockingStream[T]{ctx: ctx, elements: elems, parallel: false, workers: 1}
+func newBlockStream[T any](ctx context.Context, elems []T) *BlockStream[T] {
+	return &BlockStream[T]{ctx: ctx, elements: elems, parallel: false, workers: 1}
 }
 
-// OfBlocking 从元素创建阻塞流
-func OfBlocking[T any](ctx context.Context, values ...T) Stream[T] {
-	return newBlockingStream(ctx, values)
+// -------------------- 源操作：阻塞流 --------------------
+
+func OfBlock[T any](ctx context.Context, values ...T) Stream[T] {
+	return newBlockStream(ctx, values)
+}
+
+func OfChanBlock[T any](ctx context.Context, ins ...chan T) Stream[T] {
+	all := make([]T, 0)
+	for _, ch := range ins {
+		for v := range ch {
+			all = append(all, v)
+		}
+	}
+	return newBlockStream(ctx, all)
+}
+
+// GenerateBlock 生成阻塞流，需要给定生成数量
+func GenerateBlock[T any](ctx context.Context, s common.Supplier[T], count int) Stream[T] {
+	all := make([]T, 0, count)
+	for i := 0; i < count; i++ {
+		all = append(all, s())
+	}
+	return newBlockStream(ctx, all)
+}
+
+func ConcatBlock[T any](ctx context.Context, streams ...Stream[T]) Stream[T] {
+	all := make([]T, 0)
+	for _, s := range streams {
+		arr, _ := s.ToArray()
+		all = append(all, arr...)
+	}
+	return newBlockStream(ctx, all)
+}
+
+func EmptyBlock[T any](ctx context.Context) Stream[T] {
+	return newBlockStream(ctx, []T{})
 }
 
 // --------------------- 中间操作 ---------------------
 
-func (s *BlockingStream[T]) Map(mapper common.UnaryOperator[T]) Stream[T] {
+func (s *BlockStream[T]) Map(mapper common.UnaryOperator[T]) Stream[T] {
 	newElems := make([]T, 0, len(s.elements))
 	for _, v := range s.elements {
 		newElems = append(newElems, mapper(v))
 	}
-	return newBlockingStream(s.ctx, newElems)
+	return newBlockStream(s.ctx, newElems)
 }
 
-func (s *BlockingStream[T]) Peek(action common.Consumer[T]) Stream[T] {
+func (s *BlockStream[T]) Peek(action common.Consumer[T]) Stream[T] {
 	for _, v := range s.elements {
 		action(v)
 	}
-	return newBlockingStream(s.ctx, s.elements)
+	return newBlockStream(s.ctx, s.elements)
 }
 
-func (s *BlockingStream[T]) Filter(predicate common.Predicate[T]) Stream[T] {
+func (s *BlockStream[T]) Filter(predicate common.Predicate[T]) Stream[T] {
 	newElems := make([]T, 0)
 	for _, v := range s.elements {
 		if predicate(v) {
 			newElems = append(newElems, v)
 		}
 	}
-	return newBlockingStream(s.ctx, newElems)
+	return newBlockStream(s.ctx, newElems)
 }
 
-func (s *BlockingStream[T]) Skip(n int) Stream[T] {
+func (s *BlockStream[T]) Skip(n int) Stream[T] {
 	if n >= len(s.elements) {
-		return newBlockingStream(s.ctx, []T{})
+		return newBlockStream(s.ctx, []T{})
 	}
-	return newBlockingStream(s.ctx, s.elements[n:])
+	return newBlockStream(s.ctx, s.elements[n:])
 }
 
-func (s *BlockingStream[T]) Limit(maxSize int) Stream[T] {
+func (s *BlockStream[T]) Limit(maxSize int) Stream[T] {
+	if maxSize <= 0 {
+		return EmptyBlock[T](s.ctx)
+	}
 	if maxSize >= len(s.elements) {
-		return newBlockingStream(s.ctx, s.elements)
+		return newBlockStream(s.ctx, s.elements)
 	}
-	return newBlockingStream(s.ctx, s.elements[:maxSize])
+	return newBlockStream(s.ctx, s.elements[:maxSize])
 }
 
-func (s *BlockingStream[T]) Distinct() Stream[T] {
+func (s *BlockStream[T]) Distinct() Stream[T] {
 	seen := make(map[any]struct{})
 	newElems := make([]T, 0, len(s.elements))
 	for _, v := range s.elements {
@@ -75,20 +111,20 @@ func (s *BlockingStream[T]) Distinct() Stream[T] {
 			newElems = append(newElems, v)
 		}
 	}
-	return newBlockingStream(s.ctx, newElems)
+	return newBlockStream(s.ctx, newElems)
 }
 
-func (s *BlockingStream[T]) Sorted(comparator common.Comparator[T]) Stream[T] {
-	newElems := append([]T(nil), s.elements...)
-	sort.Slice(newElems, func(i, j int) bool {
-		return comparator(newElems[i], newElems[j]) < 0
+func (s *BlockStream[T]) Sorted(comparator common.Comparator[T]) Stream[T] {
+	sort.Slice(s.elements, func(i, j int) bool {
+		return comparator(s.elements[i], s.elements[j]) < 0
 	})
-	return newBlockingStream(s.ctx, newElems)
+
+	return s
 }
 
 // --------------------- 终止操作 ---------------------
 
-func (s *BlockingStream[T]) ForEach(action common.Consumer[T]) error {
+func (s *BlockStream[T]) ForEach(action common.Consumer[T]) error {
 	for _, v := range s.elements {
 		select {
 		case <-s.ctx.Done():
@@ -100,7 +136,7 @@ func (s *BlockingStream[T]) ForEach(action common.Consumer[T]) error {
 	return nil
 }
 
-func (s *BlockingStream[T]) ForEachOrdered(comparator common.Comparator[T], action common.Consumer[T]) error {
+func (s *BlockStream[T]) ForEachOrdered(comparator common.Comparator[T], action common.Consumer[T]) error {
 	newElems := append([]T(nil), s.elements...)
 	sort.Slice(newElems, func(i, j int) bool {
 		return comparator(newElems[i], newElems[j]) < 0
@@ -116,7 +152,7 @@ func (s *BlockingStream[T]) ForEachOrdered(comparator common.Comparator[T], acti
 	return nil
 }
 
-func (s *BlockingStream[T]) AnyMatch(predicate common.Predicate[T]) (bool, error) {
+func (s *BlockStream[T]) AnyMatch(predicate common.Predicate[T]) (bool, error) {
 	for _, v := range s.elements {
 		if predicate(v) {
 			return true, nil
@@ -125,7 +161,7 @@ func (s *BlockingStream[T]) AnyMatch(predicate common.Predicate[T]) (bool, error
 	return false, nil
 }
 
-func (s *BlockingStream[T]) AllMatch(predicate common.Predicate[T]) (bool, error) {
+func (s *BlockStream[T]) AllMatch(predicate common.Predicate[T]) (bool, error) {
 	for _, v := range s.elements {
 		if !predicate(v) {
 			return false, nil
@@ -134,7 +170,7 @@ func (s *BlockingStream[T]) AllMatch(predicate common.Predicate[T]) (bool, error
 	return true, nil
 }
 
-func (s *BlockingStream[T]) NoneMatch(predicate common.Predicate[T]) (bool, error) {
+func (s *BlockStream[T]) NoneMatch(predicate common.Predicate[T]) (bool, error) {
 	for _, v := range s.elements {
 		if predicate(v) {
 			return false, nil
@@ -143,15 +179,15 @@ func (s *BlockingStream[T]) NoneMatch(predicate common.Predicate[T]) (bool, erro
 	return true, nil
 }
 
-func (s *BlockingStream[T]) ToArray() ([]T, error) {
+func (s *BlockStream[T]) ToArray() ([]T, error) {
 	return s.elements, nil
 }
 
-func (s *BlockingStream[T]) Count() (int, error) {
+func (s *BlockStream[T]) Count() (int, error) {
 	return len(s.elements), nil
 }
 
-func (s *BlockingStream[T]) Min(comparator common.Comparator[T]) (T, error) {
+func (s *BlockStream[T]) Min(comparator common.Comparator[T]) (T, error) {
 	if len(s.elements) == 0 {
 		var zero T
 		return zero, errors.New("stream is empty")
@@ -165,7 +201,7 @@ func (s *BlockingStream[T]) Min(comparator common.Comparator[T]) (T, error) {
 	return min, nil
 }
 
-func (s *BlockingStream[T]) Max(comparator common.Comparator[T]) (T, error) {
+func (s *BlockStream[T]) Max(comparator common.Comparator[T]) (T, error) {
 	if len(s.elements) == 0 {
 		var zero T
 		return zero, errors.New("stream is empty")
@@ -179,7 +215,7 @@ func (s *BlockingStream[T]) Max(comparator common.Comparator[T]) (T, error) {
 	return max, nil
 }
 
-func (s *BlockingStream[T]) FindFirst() (T, error) {
+func (s *BlockStream[T]) FindFirst() (T, error) {
 	if len(s.elements) == 0 {
 		var zero T
 		return zero, errors.New("stream is empty")
@@ -187,7 +223,7 @@ func (s *BlockingStream[T]) FindFirst() (T, error) {
 	return s.elements[0], nil
 }
 
-func (s *BlockingStream[T]) FindAny() (T, error) {
+func (s *BlockStream[T]) FindAny() (T, error) {
 	if len(s.elements) == 0 {
 		var zero T
 		return zero, errors.New("stream is empty")
@@ -196,7 +232,7 @@ func (s *BlockingStream[T]) FindAny() (T, error) {
 	return s.elements[0], nil
 }
 
-func (s *BlockingStream[T]) Reduce(accumulator common.BinaryOperator[T]) (T, error) {
+func (s *BlockStream[T]) Reduce(accumulator common.BinaryOperator[T]) (T, error) {
 	if len(s.elements) == 0 {
 		var zero T
 		return zero, errors.New("stream is empty")
@@ -208,7 +244,7 @@ func (s *BlockingStream[T]) Reduce(accumulator common.BinaryOperator[T]) (T, err
 	return result, nil
 }
 
-func (s *BlockingStream[T]) ReduceByDefault(identity T, accumulator common.BinaryOperator[T]) (T, error) {
+func (s *BlockStream[T]) ReduceByDefault(identity T, accumulator common.BinaryOperator[T]) (T, error) {
 	result := identity
 	for _, v := range s.elements {
 		result = accumulator(result, v)
@@ -218,7 +254,7 @@ func (s *BlockingStream[T]) ReduceByDefault(identity T, accumulator common.Binar
 
 // --------------------- 辅助函数 ---------------------
 
-func (s *BlockingStream[T]) Iterator() chan T {
+func (s *BlockStream[T]) Iterator() chan T {
 	ch := make(chan T)
 	go func() {
 		defer close(ch)
@@ -229,16 +265,13 @@ func (s *BlockingStream[T]) Iterator() chan T {
 	return ch
 }
 
-func (s *BlockingStream[T]) getCtx() context.Context { return s.ctx }
-func (s *BlockingStream[T]) close(err error)         {}
-func (s *BlockingStream[T]) IsParallel() bool        { return s.parallel }
-func (s *BlockingStream[T]) GetParallelGoroutines() int {
+func (s *BlockStream[T]) getCtx() context.Context { return s.ctx }
+func (s *BlockStream[T]) close(err error)         {}
+func (s *BlockStream[T]) IsParallel() bool        { return s.parallel }
+func (s *BlockStream[T]) GetParallelGoroutines() int {
 	return s.workers
 }
-func (s *BlockingStream[T]) Parallel(n int) Stream[T] {
+func (s *BlockStream[T]) Parallel(n int) Stream[T] {
 	// 阻塞流即使设置并行，也还是顺序执行
-	newS := *s
-	newS.parallel = true
-	newS.workers = n
-	return &newS
+	return s
 }

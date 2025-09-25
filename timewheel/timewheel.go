@@ -56,7 +56,7 @@ func NewTimewheel(interval time.Duration, slotNum int, poolSize int, maxPoolSize
 	pool, err := ants.NewPool(
 		poolSize,
 		ants.WithPreAlloc(true),
-		ants.WithNonblocking(true),
+		ants.WithNonBlock(true),
 	)
 	if err != nil {
 		logger.Error("init [timewheel] ants pool failed: %v", err)
