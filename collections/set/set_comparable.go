@@ -1,12 +1,23 @@
 package set
 
-import "github.com/Cooooing/cutil/common"
+import (
+	"encoding/json"
+	"fmt"
+	"strings"
 
-// ComparableSet 适用于可比较的类型
+	"github.com/Cooooing/cutil/common"
+)
+
+// ComparableSet 适用于可比较的类型的Set集合，非线程安全
 type ComparableSet[T comparable] map[T]struct{}
 
-func NewComparableSet[T comparable](size int) Set[T] {
+func NewSet[T comparable](size int) Set[T] {
+	return NewComparableSet[T](size)
+}
+
+func NewComparableSet[T comparable](size int, items ...T) Set[T] {
 	s := make(ComparableSet[T], size)
+	s.AddAll(items...)
 	return &s
 }
 
@@ -129,13 +140,25 @@ func (s *ComparableSet[T]) Clone() Set[T] {
 }
 
 func (s *ComparableSet[T]) MarshalJSON() ([]byte, error) {
-	// TODO implement me
-	panic("implement me")
+	items := make([]string, 0, s.Len())
+	for elem := range *s {
+		b, err := json.Marshal(elem)
+		if err != nil {
+			return nil, err
+		}
+		items = append(items, string(b))
+	}
+	return []byte(fmt.Sprintf("[%s]", strings.Join(items, ","))), nil
 }
 
 func (s *ComparableSet[T]) UnmarshalJSON(b []byte) error {
-	// TODO implement me
-	panic("implement me")
+	var i []T
+	err := json.Unmarshal(b, &i)
+	if err != nil {
+		return err
+	}
+	s.AddAll(i...)
+	return nil
 }
 
 func (s *ComparableSet[T]) ContainsAnyElement(other Set[T]) bool {
@@ -263,4 +286,20 @@ func (s *ComparableSet[T]) IsSuperset(other Set[T]) bool {
 
 func (s *ComparableSet[T]) IsProperSuperset(other Set[T]) bool {
 	return s.Len() > other.Len() && s.IsSuperset(other)
+}
+
+func (s *ComparableSet[T]) Lock() {
+	return
+}
+
+func (s *ComparableSet[T]) Unlock() {
+	return
+}
+
+func (s *ComparableSet[T]) RLock() {
+	return
+}
+
+func (s *ComparableSet[T]) RUnlock() {
+	return
 }
