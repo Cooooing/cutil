@@ -3,6 +3,7 @@ package stream
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sort"
 
 	"github.com/Cooooing/cutil/common"
@@ -271,7 +272,12 @@ func (s *BlockStream[T]) IsParallel() bool        { return s.parallel }
 func (s *BlockStream[T]) GetParallelGoroutines() int {
 	return s.workers
 }
+
+// Parallel 阻塞流设置并行，返回一个新的非阻塞流
 func (s *BlockStream[T]) Parallel(n int) Stream[T] {
-	// 阻塞流即使设置并行，也还是顺序执行
-	return s
+	if n < 0 {
+		s.close(fmt.Errorf("parallelism must be non-negative number,but now is %d", n))
+	}
+	// 新建一个非阻塞流返回
+	return OfNoBlock[T](s.ctx, s.elements...).Parallel(n)
 }

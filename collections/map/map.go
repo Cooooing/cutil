@@ -1,5 +1,12 @@
 package _map
 
+import (
+	"context"
+
+	"github.com/Cooooing/cutil/common"
+	"github.com/Cooooing/cutil/stream"
+)
+
 // Map 接口，定义字典应具备的基本操作
 type Map[K any, V any] interface {
 
@@ -10,7 +17,7 @@ type Map[K any, V any] interface {
 	Remove(key K)
 	RemoveAll(keys ...K)
 	Pop(key K) (V, bool)
-	Contains(key ...K) bool
+	Contains(key K) bool
 	ContainsAll(keys ...K) bool
 	ContainsAny(keys ...K) bool
 
@@ -18,13 +25,17 @@ type Map[K any, V any] interface {
 
 	Keys() []K
 	Values() []V
+	Entries() []*Entry[K, V]
 	Len() int
 	IsEmpty() bool
 	Merge(other Map[K, V])
 	Equal(other Map[K, V]) bool
+	EqualFunc(other Map[K, V], fn common.Equator[V]) bool
 	Clone() Map[K, V]
 	Clear()
 	Reset()
+	Foreach(action common.Predicate[*Entry[K, V]])
+	Stream(ctx context.Context) stream.Stream[*Entry[K, V]]
 
 	// 线程安全锁相关
 
@@ -32,4 +43,9 @@ type Map[K any, V any] interface {
 	Unlock()
 	RLock()
 	RUnlock()
+}
+
+type Entry[T any, R any] struct {
+	Key   T
+	Value R
 }

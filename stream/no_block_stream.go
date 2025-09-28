@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"sort"
-	"strconv"
 	"sync"
 
 	"github.com/Cooooing/cutil/common"
@@ -603,12 +602,20 @@ func (s *NoBlockStream[T]) GetParallelGoroutines() int {
 	return s.parallelGoroutines
 }
 
+// Parallel 并行流 n = 0 时，退化为阻塞流
 func (s *NoBlockStream[T]) Parallel(n int) Stream[T] {
-	if n <= 0 {
-		s.close(errors.New(fmt.Sprintf("parallelism must be positive,but now is %s", strconv.Itoa(n))))
+	if n < 0 {
+		s.close(fmt.Errorf("parallelism must be non-negative number,but now is %d", n))
 	}
 	if s.hasOperations {
-		s.close(errors.New("parallel operation must be the first operation"))
+		s.close(fmt.Errorf("parallel operation must be the first operation"))
+	}
+	if n == 0 {
+		array, err := s.ToArray()
+		if err != nil {
+			s.close(err)
+		}
+		return OfBlock[T](s.ctx, array...)
 	}
 	s.hasOperations = true
 	s.parallelGoroutines = n
