@@ -71,4 +71,17 @@ type Set[T any] interface {
 	IsSuperset(other Set[T]) bool
 	// IsProperSuperset 判断是否为真超集（严格大于）
 	IsProperSuperset(other Set[T]) bool
+
+	// 线程安全锁相关
+
+	Lock()
+	Unlock()
+	RLock()
+	RUnlock()
+}
+
+// SetKeyer 接口，用于自定义集合元素的键值
+type SetKeyer interface {
+	// Key 获取键值
+	Key() string
 }
