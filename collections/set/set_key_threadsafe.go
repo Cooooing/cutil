@@ -3,20 +3,21 @@ package set
 import (
 	"sync"
 
+	"github.com/Cooooing/cutil/collections"
 	"github.com/Cooooing/cutil/common"
 )
 
 // ThreadSafeKeySet 适用于可比较的类型
-type ThreadSafeKeySet[T SetKeyer] struct {
+type ThreadSafeKeySet[T collections.Keyer] struct {
 	unsafeSet *KeySet[T]
 	sync.RWMutex
 }
 
-func NewThreadSafeKeySet[T SetKeyer](size int, items ...T) Set[T] {
+func NewThreadSafeKeySet[T collections.Keyer](size int, items ...T) Set[T] {
 	return newThreadSafeKeySet(size, items...)
 }
 
-func newThreadSafeKeySet[T SetKeyer](size int, items ...T) *ThreadSafeKeySet[T] {
+func newThreadSafeKeySet[T collections.Keyer](size int, items ...T) *ThreadSafeKeySet[T] {
 	s := make(KeySet[T], size)
 	s.AddAll(items...)
 	return &ThreadSafeKeySet[T]{
@@ -70,16 +71,16 @@ func (s *ThreadSafeKeySet[T]) ForEach(action common.Predicate[T]) {
 	s.RUnlock()
 }
 
-func (s *ThreadSafeKeySet[T]) Contains(items ...T) bool {
+func (s *ThreadSafeKeySet[T]) Contains(item T) bool {
 	s.RLock()
-	contains := s.unsafeSet.Contains(items...)
+	contains := s.unsafeSet.Contains(item)
 	s.RUnlock()
 	return contains
 }
 
-func (s *ThreadSafeKeySet[T]) ContainsOne(item T) bool {
+func (s *ThreadSafeKeySet[T]) ContainsAll(items ...T) bool {
 	s.RLock()
-	one := s.unsafeSet.ContainsOne(item)
+	one := s.unsafeSet.ContainsAll(items...)
 	s.RUnlock()
 	return one
 }

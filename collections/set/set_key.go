@@ -5,13 +5,14 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/Cooooing/cutil/collections"
 	"github.com/Cooooing/cutil/common"
 )
 
-// KeySet 适用于自定义键值的Set集合，注意其元素需要实现SetKeyer接口，非线程安全
-type KeySet[T SetKeyer] map[string]T
+// KeySet 适用于自定义键值的Set集合，注意其元素需要实现collections.Keyer接口，非线程安全
+type KeySet[T collections.Keyer] map[string]T
 
-func NewKeySet[T SetKeyer](size int, items ...T) Set[T] {
+func NewKeySet[T collections.Keyer](size int, items ...T) Set[T] {
 	s := make(KeySet[T], size)
 	s.AddAll(items...)
 	return &s
@@ -80,20 +81,20 @@ func (s *KeySet[T]) ForEach(action common.Predicate[T]) {
 	}
 }
 
-func (s *KeySet[T]) Contains(items ...T) bool {
+func (s *KeySet[T]) Contains(item T) bool {
+	if _, ok := (*s)[item.Key()]; ok {
+		return true
+	}
+	return false
+}
+
+func (s *KeySet[T]) ContainsAll(items ...T) bool {
 	for _, item := range items {
 		if _, ok := (*s)[item.Key()]; !ok {
 			return false
 		}
 	}
 	return true
-}
-
-func (s *KeySet[T]) ContainsOne(item T) bool {
-	if _, ok := (*s)[item.Key()]; ok {
-		return true
-	}
-	return false
 }
 
 func (s *KeySet[T]) ContainsAny(items ...T) bool {
@@ -160,14 +161,14 @@ func (s *KeySet[T]) UnmarshalJSON(b []byte) error {
 func (s *KeySet[T]) ContainsAnyElement(other Set[T]) bool {
 	if s.Len() < other.Len() {
 		for _, v := range *s {
-			if other.ContainsOne(v) {
+			if other.ContainsAll(v) {
 				return true
 			}
 		}
 	} else {
 		found := false
 		other.ForEach(func(t T) bool {
-			if s.ContainsOne(t) {
+			if s.ContainsAll(t) {
 				found = true
 				return false
 			}
@@ -203,13 +204,13 @@ func (s *KeySet[T]) Intersection(other Set[T]) Set[T] {
 	intersectedSet := make(KeySet[T], n)
 	if s.Len() < other.Len() {
 		for _, v := range *s {
-			if other.ContainsOne(v) {
+			if other.ContainsAll(v) {
 				intersectedSet.Add(v)
 			}
 		}
 	} else {
 		other.ForEach(func(t T) bool {
-			if s.ContainsOne(t) {
+			if s.ContainsAll(t) {
 				intersectedSet.Add(t)
 			}
 			return true
@@ -221,7 +222,7 @@ func (s *KeySet[T]) Intersection(other Set[T]) Set[T] {
 func (s *KeySet[T]) Difference(other Set[T]) Set[T] {
 	diffSet := make(KeySet[T], s.Len())
 	for _, v := range *s {
-		if !other.ContainsOne(v) {
+		if !other.ContainsAll(v) {
 			diffSet.Add(v)
 		}
 	}
@@ -231,12 +232,12 @@ func (s *KeySet[T]) Difference(other Set[T]) Set[T] {
 func (s *KeySet[T]) SymmetricDifference(other Set[T]) Set[T] {
 	sdSet := make(KeySet[T], s.Len()+other.Len())
 	for _, v := range *s {
-		if !other.ContainsOne(v) {
+		if !other.ContainsAll(v) {
 			sdSet.Add(v)
 		}
 	}
 	other.ForEach(func(t T) bool {
-		if !s.ContainsOne(t) {
+		if !s.ContainsAll(t) {
 			sdSet.Add(t)
 		}
 		return true
@@ -265,7 +266,7 @@ func (s *KeySet[T]) IsSubset(other Set[T]) bool {
 		return false
 	}
 	for _, v := range *s {
-		if !other.ContainsOne(v) {
+		if !other.ContainsAll(v) {
 			return false
 		}
 	}

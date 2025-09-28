@@ -84,20 +84,20 @@ func (s *ComparableSet[T]) ForEach(action common.Predicate[T]) {
 	}
 }
 
-func (s *ComparableSet[T]) Contains(items ...T) bool {
+func (s *ComparableSet[T]) Contains(item T) bool {
+	if _, ok := (*s)[item]; ok {
+		return true
+	}
+	return false
+}
+
+func (s *ComparableSet[T]) ContainsAll(items ...T) bool {
 	for _, item := range items {
 		if _, ok := (*s)[item]; !ok {
 			return false
 		}
 	}
 	return true
-}
-
-func (s *ComparableSet[T]) ContainsOne(item T) bool {
-	if _, ok := (*s)[item]; ok {
-		return true
-	}
-	return false
 }
 
 func (s *ComparableSet[T]) ContainsAny(items ...T) bool {
@@ -164,14 +164,14 @@ func (s *ComparableSet[T]) UnmarshalJSON(b []byte) error {
 func (s *ComparableSet[T]) ContainsAnyElement(other Set[T]) bool {
 	if s.Len() < other.Len() {
 		for elem := range *s {
-			if other.ContainsOne(elem) {
+			if other.ContainsAll(elem) {
 				return true
 			}
 		}
 	} else {
 		found := false
 		other.ForEach(func(t T) bool {
-			if s.ContainsOne(t) {
+			if s.ContainsAll(t) {
 				found = true
 				return false
 			}
@@ -207,13 +207,13 @@ func (s *ComparableSet[T]) Intersection(other Set[T]) Set[T] {
 	intersectedSet := make(ComparableSet[T], n)
 	if s.Len() < other.Len() {
 		for elem := range *s {
-			if other.ContainsOne(elem) {
+			if other.ContainsAll(elem) {
 				intersectedSet.Add(elem)
 			}
 		}
 	} else {
 		other.ForEach(func(t T) bool {
-			if s.ContainsOne(t) {
+			if s.ContainsAll(t) {
 				intersectedSet.Add(t)
 			}
 			return true
@@ -225,7 +225,7 @@ func (s *ComparableSet[T]) Intersection(other Set[T]) Set[T] {
 func (s *ComparableSet[T]) Difference(other Set[T]) Set[T] {
 	diffSet := make(ComparableSet[T], s.Len())
 	for elem := range *s {
-		if !other.ContainsOne(elem) {
+		if !other.ContainsAll(elem) {
 			diffSet.Add(elem)
 		}
 	}
@@ -235,12 +235,12 @@ func (s *ComparableSet[T]) Difference(other Set[T]) Set[T] {
 func (s *ComparableSet[T]) SymmetricDifference(other Set[T]) Set[T] {
 	sdSet := make(ComparableSet[T], s.Len()+other.Len())
 	for elem := range *s {
-		if !other.ContainsOne(elem) {
+		if !other.ContainsAll(elem) {
 			sdSet.Add(elem)
 		}
 	}
 	other.ForEach(func(t T) bool {
-		if !s.ContainsOne(t) {
+		if !s.ContainsAll(t) {
 			sdSet.Add(t)
 		}
 		return true
@@ -269,7 +269,7 @@ func (s *ComparableSet[T]) IsSubset(other Set[T]) bool {
 		return false
 	}
 	for elem := range *s {
-		if !other.ContainsOne(elem) {
+		if !other.ContainsAll(elem) {
 			return false
 		}
 	}

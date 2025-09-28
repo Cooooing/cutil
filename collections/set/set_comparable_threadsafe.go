@@ -70,16 +70,16 @@ func (s *ThreadSafeComparableSet[T]) ForEach(action common.Predicate[T]) {
 	s.RUnlock()
 }
 
-func (s *ThreadSafeComparableSet[T]) Contains(items ...T) bool {
+func (s *ThreadSafeComparableSet[T]) Contains(item T) bool {
 	s.RLock()
-	contains := s.unsafeSet.Contains(items...)
+	contains := s.unsafeSet.Contains(item)
 	s.RUnlock()
 	return contains
 }
 
-func (s *ThreadSafeComparableSet[T]) ContainsOne(item T) bool {
+func (s *ThreadSafeComparableSet[T]) ContainsAll(items ...T) bool {
 	s.RLock()
-	one := s.unsafeSet.ContainsOne(item)
+	one := s.unsafeSet.ContainsAll(items...)
 	s.RUnlock()
 	return one
 }

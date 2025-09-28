@@ -22,10 +22,10 @@ type Set[T any] interface {
 	// ForEach 迭代集合
 	ForEach(consumer common.Predicate[T])
 
-	// Contains 判断是否存在所有元素
-	Contains(items ...T) bool
-	// ContainsOne 判断是否存在一个元素
-	ContainsOne(item T) bool
+	// Contains 判断是否存在元素
+	Contains(item T) bool
+	// ContainsAll 判断是否存在所有元素
+	ContainsAll(items ...T) bool
 	// ContainsAny 判断是否包含任意元素
 	ContainsAny(items ...T) bool
 
@@ -78,10 +78,4 @@ type Set[T any] interface {
 	Unlock()
 	RLock()
 	RUnlock()
-}
-
-// SetKeyer 接口，用于自定义集合元素的键值
-type SetKeyer interface {
-	// Key 获取键值
-	Key() string
 }
