@@ -14,26 +14,30 @@ jobs:
       max-parallel: 3
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
-    env:
-      GOTOOLCHAIN: local
+
     steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
       - name: Install Go
         uses: actions/setup-go@v5
         with:
           go-version: ${{ matrix.go-version }}
 
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - name: Print Go version
+        run: go version
 
+      # Linux/macOS 跑 Bash
       - name: Run tests (bash)
         if: runner.os != 'Windows'
         shell: bash
         run: |
           for pkg in $(go list ./...); do
             echo "===> $pkg"
-            go test -v $pkg || exit 1
+            go test -v -race -short $pkg || exit 1
           done
 
+      # Windows 跑 PowerShell
       - name: Run tests (PowerShell)
         if: runner.os == 'Windows'
         shell: pwsh
@@ -41,6 +45,6 @@ jobs:
           $pkgs = go list ./...
           foreach ($pkg in $pkgs) {
             echo "===> $pkg"
-            go test -v $pkg
+            go test -v -race -short $pkg
             if ($LASTEXITCODE -ne 0) { exit 1 }
           }
