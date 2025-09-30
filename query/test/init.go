@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Cooooing/cutil/common/logger"
+	"github.com/Cooooing/cutil/base/logger"
 )
 
 var DB *sql.DB

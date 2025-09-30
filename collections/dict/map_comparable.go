@@ -4,7 +4,7 @@ import (
 	"context"
 	"reflect"
 
-	"github.com/Cooooing/cutil/common"
+	"github.com/Cooooing/cutil/base"
 	"github.com/Cooooing/cutil/stream"
 )
 
@@ -123,7 +123,7 @@ func (m *ComparableMap[K, V]) Equal(other Map[K, V]) bool {
 	return true
 }
 
-func (m *ComparableMap[K, V]) EqualFunc(other Map[K, V], fn common.Equator[V]) bool {
+func (m *ComparableMap[K, V]) EqualFunc(other Map[K, V], fn base.Equator[V]) bool {
 	if m.Len() != other.Len() {
 		return false
 	}
@@ -153,7 +153,7 @@ func (m *ComparableMap[K, V]) Reset() {
 	*m = make(ComparableMap[K, V])
 }
 
-func (m *ComparableMap[K, V]) Foreach(action common.Predicate[*Entry[K, V]]) {
+func (m *ComparableMap[K, V]) Foreach(action base.Predicate[*Entry[K, V]]) {
 	for item := range *m {
 		action(&Entry[K, V]{
 			Key:   item,

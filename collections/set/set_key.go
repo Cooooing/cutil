@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/Cooooing/cutil/base"
 	"github.com/Cooooing/cutil/collections"
-	"github.com/Cooooing/cutil/common"
 )
 
 // KeySet 适用于自定义键值的Set集合，注意其元素需要实现collections.Keyer接口，非线程安全
@@ -73,7 +73,7 @@ func (s *KeySet[T]) PopN(n int) ([]T, int) {
 	return items, count
 }
 
-func (s *KeySet[T]) ForEach(action common.Predicate[T]) {
+func (s *KeySet[T]) ForEach(action base.Predicate[T]) {
 	for _, v := range *s {
 		if !action(v) {
 			return

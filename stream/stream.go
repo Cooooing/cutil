@@ -4,7 +4,7 @@ import (
 	"context"
 	"sync"
 
-	"github.com/Cooooing/cutil/common"
+	"github.com/Cooooing/cutil/base"
 )
 
 type Stream[T any] interface {
@@ -13,11 +13,11 @@ type Stream[T any] interface {
 	// 中间操作
 
 	// Map 返回一个流，该流由该流中的每个元素通过指定的映射函数映射生成。转换后的元素类型不变。
-	Map(mapper common.UnaryOperator[T]) Stream[T]
+	Map(mapper base.UnaryOperator[T]) Stream[T]
 	// Peek 返回一个由该流的元素组成的流，并在从结果流中消耗元素时对每个元素执行提供的操作。
-	Peek(action common.Consumer[T]) Stream[T]
+	Peek(action base.Consumer[T]) Stream[T]
 	// Filter 返回一个流，该流由与给定条件函数匹配的元素组成。
-	Filter(predicate common.Predicate[T]) Stream[T]
+	Filter(predicate base.Predicate[T]) Stream[T]
 	// Skip 在丢弃流的前n个元素后，返回由该流的其余元素组成的流。如果此流包含的元素少于n个，则会阻塞。
 	Skip(n int) Stream[T]
 	// Limit 返回一个由该流的元素组成的流，该流被截断为长度不超过maxSize。如果此流包含的元素少于maxSize个，则会阻塞。
@@ -25,36 +25,36 @@ type Stream[T any] interface {
 	// Distinct 返回一个去重后的流，元素顺序保持不变。
 	Distinct() Stream[T]
 	// Sorted 返回一个已排序的流，元素顺序保持不变。
-	Sorted(comparator common.Comparator[T]) Stream[T]
+	Sorted(comparator base.Comparator[T]) Stream[T]
 
 	// 终止操作
 
 	// ForEach 迭代流中的每个元素，按顺序执行提供的操作。
-	ForEach(action common.Consumer[T]) error
+	ForEach(action base.Consumer[T]) error
 	// ForEachOrdered 迭代流中的每个元素，按顺序执行提供的操作。
-	ForEachOrdered(comparator common.Comparator[T], action common.Consumer[T]) error
+	ForEachOrdered(comparator base.Comparator[T], action base.Consumer[T]) error
 	// AnyMatch 检查是否存在满足条件的元素
-	AnyMatch(predicate common.Predicate[T]) (bool, error)
+	AnyMatch(predicate base.Predicate[T]) (bool, error)
 	// AllMatch 检查是否所有元素都满足条件
-	AllMatch(predicate common.Predicate[T]) (bool, error)
+	AllMatch(predicate base.Predicate[T]) (bool, error)
 	// NoneMatch 检查是否没有元素满足条件
-	NoneMatch(predicate common.Predicate[T]) (bool, error)
+	NoneMatch(predicate base.Predicate[T]) (bool, error)
 	// ToArray 返回一个包含此流中所有元素的数组。
 	ToArray() ([]T, error)
 	// Count 返回此流中的元素数。
 	Count() (int, error)
 	// Min 返回此流中的最小元素。
-	Min(comparator common.Comparator[T]) (T, error)
+	Min(comparator base.Comparator[T]) (T, error)
 	// Max 返回此流中的最大元素。
-	Max(comparator common.Comparator[T]) (T, error)
+	Max(comparator base.Comparator[T]) (T, error)
 	// FindFirst 尝试返回此流中的第一个元素。
 	FindFirst() (T, error)
 	// FindAny 尝试返回此流中的任意元素。
 	FindAny() (T, error)
 	// Reduce 尝试将此流中元素归约为单个值。初始值为流中第一个元素。
-	Reduce(accumulator common.BinaryOperator[T]) (T, error)
+	Reduce(accumulator base.BinaryOperator[T]) (T, error)
 	// ReduceByDefault 尝试将此流中元素归约为单个值。给定初始值。
-	ReduceByDefault(identity T, accumulator common.BinaryOperator[T]) (T, error)
+	ReduceByDefault(identity T, accumulator base.BinaryOperator[T]) (T, error)
 
 	// Iterator 返回一个通道，用于迭代流中的元素。需要自行处理通道的生命周期。
 	Iterator() chan T
@@ -75,7 +75,7 @@ type Stream[T any] interface {
 
 // 流操作，返回一个流或结果，但流中数据或结果类型发生改变。（解决go中方法不能增加泛型的问题）
 
-func Map[T any, R any](stream Stream[T], mapper common.Function[T, R]) Stream[R] {
+func Map[T any, R any](stream Stream[T], mapper base.Function[T, R]) Stream[R] {
 	switch s := stream.(type) {
 	case *BlockStream[T]:
 		arr, _ := s.ToArray()
@@ -104,7 +104,7 @@ func Map[T any, R any](stream Stream[T], mapper common.Function[T, R]) Stream[R]
 	}
 }
 
-func FlatMap[T any, R any](stream Stream[T], mapper common.Function[T, Stream[R]]) Stream[R] {
+func FlatMap[T any, R any](stream Stream[T], mapper base.Function[T, Stream[R]]) Stream[R] {
 	switch s := stream.(type) {
 	case *BlockStream[T]:
 		arr, _ := s.ToArray()
@@ -139,8 +139,8 @@ func FlatMap[T any, R any](stream Stream[T], mapper common.Function[T, Stream[R]
 }
 
 func Reduce[T any, R any](stream Stream[T], identity R,
-	accumulator common.BiFunction[T, R],
-	combiner common.BinaryOperator[R]) (R, error) {
+	accumulator base.BiFunction[T, R],
+	combiner base.BinaryOperator[R]) (R, error) {
 
 	switch s := stream.(type) {
 	case *BlockStream[T]:
@@ -188,7 +188,7 @@ func Reduce[T any, R any](stream Stream[T], identity R,
 	}
 }
 
-func GroupBy[T any, K comparable](stream Stream[T], classifier common.Function[T, K]) (map[K][]T, error) {
+func GroupBy[T any, K comparable](stream Stream[T], classifier base.Function[T, K]) (map[K][]T, error) {
 	switch s := stream.(type) {
 	case *BlockStream[T]:
 		arr, _ := s.ToArray()

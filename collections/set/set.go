@@ -1,6 +1,6 @@
 package set
 
-import "github.com/Cooooing/cutil/common"
+import "github.com/Cooooing/cutil/base"
 
 // Set 接口，定义集合应具备的基本操作
 type Set[T any] interface {
@@ -20,7 +20,7 @@ type Set[T any] interface {
 	// PopN 删除并返回n个元素
 	PopN(n int) ([]T, int)
 	// ForEach 迭代集合
-	ForEach(consumer common.Predicate[T])
+	ForEach(consumer base.Predicate[T])
 
 	// Contains 判断是否存在元素
 	Contains(item T) bool

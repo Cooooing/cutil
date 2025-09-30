@@ -1,4 +1,4 @@
-package common
+package base
 
 type (
 	Function[T any, R any]   func(T) R

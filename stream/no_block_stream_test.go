@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Cooooing/cutil/common"
+	"github.com/Cooooing/cutil/base"
 )
 
 func TestOfNoBlock(t *testing.T) {
@@ -102,7 +102,7 @@ func TestGenerateNoBlock(t *testing.T) {
 	tests := []struct {
 		name     string
 		count    int
-		input    common.Supplier[int]
+		input    base.Supplier[int]
 		expected []int
 	}{
 		{name: "generate numbers", count: 3, input: func() int { return 1 }, expected: []int{1, 1, 1}},
@@ -312,7 +312,7 @@ func TestMapNoBlock(t *testing.T) {
 	tests := []struct {
 		name     string
 		input    []int
-		mapper   common.UnaryOperator[int]
+		mapper   base.UnaryOperator[int]
 		expected []int
 	}{
 		{name: "empty stream", input: []int{}, mapper: func(x int) int { return x * 2 }, expected: []int{}},
@@ -340,7 +340,7 @@ func TestFilterNoBlock(t *testing.T) {
 	tests := []struct {
 		name      string
 		input     []int
-		predicate common.Predicate[int]
+		predicate base.Predicate[int]
 		expected  []int
 	}{
 		{name: "empty stream", input: []int{}, predicate: func(x int) bool { return x%2 == 0 }, expected: []int{}},
@@ -459,7 +459,7 @@ func TestSortedNoBlock(t *testing.T) {
 	tests := []struct {
 		name       string
 		input      []int
-		comparator common.Comparator[int]
+		comparator base.Comparator[int]
 		expected   []int
 	}{
 		{name: "empty stream", input: []int{}, comparator: func(a, b int) int { return a - b }, expected: []int{}},
@@ -488,7 +488,7 @@ func TestForEachNoBlock(t *testing.T) {
 	tests := []struct {
 		name     string
 		input    []int
-		consumer common.Consumer[int]
+		consumer base.Consumer[int]
 		expected []int
 	}{
 		{name: "empty stream", input: []int{}, consumer: func(x int) {}, expected: []int{}},

@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/Cooooing/cutil/common/logger"
+	"github.com/Cooooing/cutil/base/logger"
 	"github.com/Cooooing/cutil/query"
 	"github.com/Cooooing/cutil/query/dml"
 )
