@@ -10,7 +10,7 @@ import (
 )
 
 func TestSimpleSelect(t *testing.T) {
-	Init()
+	Init(t)
 	sql.Debug()
 
 	/*
@@ -46,7 +46,7 @@ func TestSimpleSelect(t *testing.T) {
 }
 
 func TestJoinSelect(t *testing.T) {
-	Init()
+	Init(t)
 	var (
 		err   error
 		res   []*PostTitle
@@ -93,7 +93,7 @@ func TestJoinSelect(t *testing.T) {
 }
 
 func TestNestedSelect(t *testing.T) {
-	Init()
+	Init(t)
 	var (
 		err   error
 		res   []*PostTitle

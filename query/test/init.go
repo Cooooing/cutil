@@ -3,6 +3,7 @@ package test
 import (
 	"database/sql"
 	"log"
+	"testing"
 	"time"
 
 	"github.com/Cooooing/cutil/common/logger"
@@ -10,7 +11,11 @@ import (
 
 var DB *sql.DB
 
-func Init() {
+func Init(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skip db tests in short mode")
+	}
+
 	var err error
 	DB, err = sql.Open("mysql", "root:mysql@tcp(127.0.0.1:3306)/test?charset=utf8&parseTime=True&loc=Local")
 	if err != nil {

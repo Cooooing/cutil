@@ -14,7 +14,7 @@ const query = `select * from "user" where id in $1 order by id`
 var args = []any{[]int{1, 2}}
 
 func TestPageQueryForStruct(t *testing.T) {
-	Init()
+	Init(t)
 	res, err := sql2.PageQueryForStruct[User](DB, nil, query, args...)
 	if err != nil {
 		t.Error(err)
@@ -24,7 +24,7 @@ func TestPageQueryForStruct(t *testing.T) {
 }
 
 func TestPageQueryForMap(t *testing.T) {
-	Init()
+	Init(t)
 	res, err := sql2.PageQueryForMap(DB, &sql2.PageReq{Page: 1, Size: 100}, query, args...)
 	if err != nil {
 		t.Error(err)
@@ -34,7 +34,7 @@ func TestPageQueryForMap(t *testing.T) {
 }
 
 func TestPageQueryForStructWithLimitOffset(t *testing.T) {
-	Init()
+	Init(t)
 	res, err := sql2.PageQueryForStructWithLimitOffset[User](DB, &sql2.PageReq{Page: 1, Size: 100}, query, args...)
 	if err != nil {
 		t.Error(err)
@@ -44,7 +44,7 @@ func TestPageQueryForStructWithLimitOffset(t *testing.T) {
 }
 
 func TestPageQueryForMapWithLimitOffset(t *testing.T) {
-	Init()
+	Init(t)
 	res, err := sql2.PageQueryForMapWithLimitOffset(DB, &sql2.PageReq{Page: 1, Size: 100}, query, args...)
 	if err != nil {
 		t.Error(err)
@@ -54,7 +54,7 @@ func TestPageQueryForMapWithLimitOffset(t *testing.T) {
 }
 
 func TestPageQueryForStructWithRowNumber(t *testing.T) {
-	Init()
+	Init(t)
 	res, err := sql2.PageQueryForStructWithRowNumber[User](DB, &sql2.PageReq{Page: 1, Size: 100}, query, args...)
 	if err != nil {
 		t.Error(err)
@@ -64,7 +64,7 @@ func TestPageQueryForStructWithRowNumber(t *testing.T) {
 }
 
 func TestPageQueryForMapWithRowNumber(t *testing.T) {
-	Init()
+	Init(t)
 	res, err := sql2.PageQueryForMapWithRowNumber(DB, &sql2.PageReq{Page: 1, Size: 100}, query, args...)
 	if err != nil {
 		t.Error(err)
@@ -74,7 +74,7 @@ func TestPageQueryForMapWithRowNumber(t *testing.T) {
 }
 
 func TestPageQueryForStructWithFetchOffset(t *testing.T) {
-	Init()
+	Init(t)
 	res, err := sql2.PageQueryForStructWithFetchOffset[User](DB, &sql2.PageReq{Page: 1, Size: 100}, query, args...)
 	if err != nil {
 		t.Error(err)
@@ -84,7 +84,7 @@ func TestPageQueryForStructWithFetchOffset(t *testing.T) {
 }
 
 func TestPageQueryForMapWithFetchOffset(t *testing.T) {
-	Init()
+	Init(t)
 	res, err := sql2.PageQueryForMapWithFetchOffset(DB, &sql2.PageReq{Page: 1, Size: 100}, query, args...)
 	if err != nil {
 		t.Error(err)
@@ -94,7 +94,7 @@ func TestPageQueryForMapWithFetchOffset(t *testing.T) {
 }
 
 func TestPageQueryForStructWithDeclareCursor(t *testing.T) {
-	Init()
+	Init(t)
 	res, err := sql2.PageQueryForStructWithDeclareCursor[User](DB, &sql2.PageReq{Page: 1, Size: 100}, query, args...)
 	if err != nil {
 		t.Error(err)
@@ -104,7 +104,7 @@ func TestPageQueryForStructWithDeclareCursor(t *testing.T) {
 }
 
 func TestPageQueryForMapWithDeclareCursor(t *testing.T) {
-	Init()
+	Init(t)
 	res, err := sql2.PageQueryForMapWithDeclareCursor(DB, &sql2.PageReq{Page: 1, Size: 100}, query, args...)
 	if err != nil {
 		t.Error(err)

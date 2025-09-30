@@ -10,7 +10,7 @@ import (
 )
 
 func TestInsert(t *testing.T) {
-	Init()
+	Init(t)
 	var (
 		err   error
 		res   []*PostTitle
