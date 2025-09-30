@@ -35,13 +35,8 @@ func TestExport(t *testing.T) {
 		{"id": 7, "name": "吴九", "age": 24},
 		{"id": 8, "name": "郑十", "age": 25},
 	}
-	db, err := sql.Open("mysql", "root:mysql@tcp(127.0.0.1:3306)/test?charset=utf8&parseTime=True&loc=Local")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer func(db *sql.DB) {
-		_ = db.Close()
-	}(db)
+
+	db := InitDB(t)
 
 	t.Run("ExportFromDataMap", func(t *testing.T) {
 		err := f.ExportFromDataMap(t.Name()[strings.LastIndex(t.Name(), "/")+1:], title, keys, data)
@@ -68,8 +63,22 @@ func TestExport(t *testing.T) {
 		}
 	})
 
-	err = f.WriteToFile(".")
+	err := f.WriteToFile(".")
 	if err != nil {
 		t.Error(err)
 	}
+	defer func(db *sql.DB) {
+		_ = db.Close()
+	}(db)
+}
+
+func InitDB(t *testing.T) *sql.DB {
+	if testing.Short() {
+		t.Skip("skip db tests in short mode")
+	}
+	db, err := sql.Open("mysql", "root:mysql@tcp(127.0.0.1:3306)/test?charset=utf8&parseTime=True&loc=Local")
+	if err != nil {
+		t.Fatal(err)
+	}
+	return db
 }
