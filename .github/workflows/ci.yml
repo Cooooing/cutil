@@ -25,6 +25,22 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Run tests
+      - name: Run tests (bash)
+        if: runner.os != 'Windows'
+        shell: bash
         run: |
-          go test -v -race ./... -short
+          for pkg in $(go list ./...); do
+            echo "===> $pkg"
+            go test -v $pkg || exit 1
+          done
+
+      - name: Run tests (PowerShell)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $pkgs = go list ./...
+          foreach ($pkg in $pkgs) {
+            echo "===> $pkg"
+            go test -v $pkg
+            if ($LASTEXITCODE -ne 0) { exit 1 }
+          }
