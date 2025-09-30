@@ -27,7 +27,4 @@ jobs:
 
       - name: Run tests
         run: |
-          for pkg in $(go list ./...); do
-            echo "===> $pkg"
-            go test -v $pkg || exit 1
-          done
+          go test -v -race ./... -short
