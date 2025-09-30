@@ -1,6 +1,8 @@
 module github.com/Cooooing/cutil
 
-go 1.24
+go 1.24.0
+
+toolchain go1.24.4
 
 require (
 	github.com/go-sql-driver/mysql v1.9.3
