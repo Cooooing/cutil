@@ -4,8 +4,8 @@ import (
 	"context"
 	"sync"
 
+	"github.com/Cooooing/cutil/base"
 	"github.com/Cooooing/cutil/collections"
-	"github.com/Cooooing/cutil/common"
 	"github.com/Cooooing/cutil/stream"
 )
 
@@ -126,7 +126,7 @@ func (m *ThreadSafeMap[K, V]) Equal(other Map[K, V]) bool {
 	return equal
 }
 
-func (m *ThreadSafeMap[K, V]) EqualFunc(other Map[K, V], fn common.Equator[V]) bool {
+func (m *ThreadSafeMap[K, V]) EqualFunc(other Map[K, V], fn base.Equator[V]) bool {
 	m.RLock()
 	other.RLock()
 	equal := m.EqualFunc(other, fn)
@@ -157,7 +157,7 @@ func (m *ThreadSafeMap[K, V]) Reset() {
 	m.Unlock()
 }
 
-func (m *ThreadSafeMap[K, V]) Foreach(action common.Predicate[*Entry[K, V]]) {
+func (m *ThreadSafeMap[K, V]) Foreach(action base.Predicate[*Entry[K, V]]) {
 	m.RLock()
 	m.unsafeMap.Foreach(action)
 	m.RUnlock()

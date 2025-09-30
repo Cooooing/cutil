@@ -6,7 +6,7 @@ import (
 	"runtime/debug"
 	"time"
 
-	"github.com/Cooooing/cutil/common/logger"
+	"github.com/Cooooing/cutil/base/logger"
 	"github.com/orcaman/concurrent-map/v2"
 	"github.com/panjf2000/ants/v2"
 )

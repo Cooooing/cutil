@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/Cooooing/cutil/common"
+	"github.com/Cooooing/cutil/base"
 )
 
 // ComparableSet 适用于可比较的类型的Set集合，非线程安全
@@ -76,7 +76,7 @@ func (s *ComparableSet[T]) PopN(n int) ([]T, int) {
 	return items, count
 }
 
-func (s *ComparableSet[T]) ForEach(action common.Predicate[T]) {
+func (s *ComparableSet[T]) ForEach(action base.Predicate[T]) {
 	for item := range *s {
 		if !action(item) {
 			return

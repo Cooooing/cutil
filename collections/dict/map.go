@@ -3,7 +3,7 @@ package dict
 import (
 	"context"
 
-	"github.com/Cooooing/cutil/common"
+	"github.com/Cooooing/cutil/base"
 	"github.com/Cooooing/cutil/stream"
 )
 
@@ -30,11 +30,11 @@ type Map[K any, V any] interface {
 	IsEmpty() bool
 	Merge(other Map[K, V])
 	Equal(other Map[K, V]) bool
-	EqualFunc(other Map[K, V], fn common.Equator[V]) bool
+	EqualFunc(other Map[K, V], fn base.Equator[V]) bool
 	Clone() Map[K, V]
 	Clear()
 	Reset()
-	Foreach(action common.Predicate[*Entry[K, V]])
+	Foreach(action base.Predicate[*Entry[K, V]])
 	Stream(ctx context.Context) stream.Stream[*Entry[K, V]]
 
 	// 线程安全锁相关

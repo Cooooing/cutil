@@ -5,7 +5,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/Cooooing/cutil/common/logger"
+	"github.com/Cooooing/cutil/base/logger"
 	"github.com/Cooooing/cutil/query/base"
 )
 

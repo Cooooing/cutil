@@ -3,7 +3,7 @@ package set
 import (
 	"sync"
 
-	"github.com/Cooooing/cutil/common"
+	"github.com/Cooooing/cutil/base"
 )
 
 // ThreadSafeComparableSet 适用于可比较的类型
@@ -64,7 +64,7 @@ func (s *ThreadSafeComparableSet[T]) PopN(n int) ([]T, int) {
 	return pop, n
 }
 
-func (s *ThreadSafeComparableSet[T]) ForEach(action common.Predicate[T]) {
+func (s *ThreadSafeComparableSet[T]) ForEach(action base.Predicate[T]) {
 	s.RLock()
 	s.unsafeSet.ForEach(action)
 	s.RUnlock()

@@ -6,7 +6,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/Cooooing/cutil/common/logger"
+	"github.com/Cooooing/cutil/base/logger"
 	"github.com/xuri/excelize/v2"
 )
 

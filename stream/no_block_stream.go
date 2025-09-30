@@ -7,7 +7,7 @@ import (
 	"sort"
 	"sync"
 
-	"github.com/Cooooing/cutil/common"
+	"github.com/Cooooing/cutil/base"
 )
 
 type NoBlockStream[T any] struct {
@@ -84,7 +84,7 @@ func OfChanNoBlock[T any](ctx context.Context, ins ...chan T) Stream[T] {
 }
 
 // GenerateNoBlock 返回一个无限流，由 Supplier 提供的元素组成
-func GenerateNoBlock[T any](ctx context.Context, s common.Supplier[T]) Stream[T] {
+func GenerateNoBlock[T any](ctx context.Context, s base.Supplier[T]) Stream[T] {
 	p := newNoBlockStream[T](ctx)
 	out := make(chan T, 1)
 	p.out <- out
@@ -133,7 +133,7 @@ func EmptyNoBlock[T any](ctx context.Context) Stream[T] {
 
 // --------------------- 中间操作 ---------------------
 
-func (s *NoBlockStream[T]) Map(action common.UnaryOperator[T]) Stream[T] {
+func (s *NoBlockStream[T]) Map(action base.UnaryOperator[T]) Stream[T] {
 	in, out := s.initOp()
 	s.wg.Add(s.parallelGoroutines)
 	var currentWg sync.WaitGroup
@@ -163,7 +163,7 @@ func (s *NoBlockStream[T]) Map(action common.UnaryOperator[T]) Stream[T] {
 	return s
 }
 
-func (s *NoBlockStream[T]) Peek(action common.Consumer[T]) Stream[T] {
+func (s *NoBlockStream[T]) Peek(action base.Consumer[T]) Stream[T] {
 	in, out := s.initOp()
 	s.wg.Add(s.parallelGoroutines)
 	var currentWg sync.WaitGroup
@@ -190,7 +190,7 @@ func (s *NoBlockStream[T]) Peek(action common.Consumer[T]) Stream[T] {
 	return s
 }
 
-func (s *NoBlockStream[T]) Filter(predicate common.Predicate[T]) Stream[T] {
+func (s *NoBlockStream[T]) Filter(predicate base.Predicate[T]) Stream[T] {
 	in, out := s.initOp()
 	s.wg.Add(s.parallelGoroutines)
 	var currentWg sync.WaitGroup
@@ -289,7 +289,7 @@ func (s *NoBlockStream[T]) Distinct() Stream[T] {
 }
 
 // Sorted 排序操作
-func (s *NoBlockStream[T]) Sorted(comparator common.Comparator[T]) Stream[T] {
+func (s *NoBlockStream[T]) Sorted(comparator base.Comparator[T]) Stream[T] {
 	in, out := s.initOp()
 	s.wg.Add(1)
 	go func() {
@@ -331,7 +331,7 @@ func (s *NoBlockStream[T]) Sorted(comparator common.Comparator[T]) Stream[T] {
 
 // --------------------- 终止操作 ---------------------
 
-func (s *NoBlockStream[T]) ForEach(action common.Consumer[T]) error {
+func (s *NoBlockStream[T]) ForEach(action base.Consumer[T]) error {
 	in := s.initTerminalOp()
 	if s.err != nil {
 		return s.err
@@ -351,12 +351,12 @@ func (s *NoBlockStream[T]) ForEach(action common.Consumer[T]) error {
 	}
 }
 
-func (s *NoBlockStream[T]) ForEachOrdered(comparator common.Comparator[T], action common.Consumer[T]) error {
+func (s *NoBlockStream[T]) ForEachOrdered(comparator base.Comparator[T], action base.Consumer[T]) error {
 	s.Sorted(comparator)
 	return s.ForEach(action)
 }
 
-func (s *NoBlockStream[T]) AnyMatch(predicate common.Predicate[T]) (bool, error) {
+func (s *NoBlockStream[T]) AnyMatch(predicate base.Predicate[T]) (bool, error) {
 	in := s.initTerminalOp()
 	if s.err != nil {
 		return false, s.err
@@ -376,7 +376,7 @@ func (s *NoBlockStream[T]) AnyMatch(predicate common.Predicate[T]) (bool, error)
 	}
 }
 
-func (s *NoBlockStream[T]) AllMatch(predicate common.Predicate[T]) (bool, error) {
+func (s *NoBlockStream[T]) AllMatch(predicate base.Predicate[T]) (bool, error) {
 	in := s.initTerminalOp()
 	if s.err != nil {
 		return false, s.err
@@ -399,7 +399,7 @@ func (s *NoBlockStream[T]) AllMatch(predicate common.Predicate[T]) (bool, error)
 	}
 }
 
-func (s *NoBlockStream[T]) NoneMatch(predicate common.Predicate[T]) (bool, error) {
+func (s *NoBlockStream[T]) NoneMatch(predicate base.Predicate[T]) (bool, error) {
 	in := s.initTerminalOp()
 	if s.err != nil {
 		return false, s.err
@@ -464,7 +464,7 @@ func (s *NoBlockStream[T]) Count() (int, error) {
 	}
 }
 
-func (s *NoBlockStream[T]) Min(comparator common.Comparator[T]) (T, error) {
+func (s *NoBlockStream[T]) Min(comparator base.Comparator[T]) (T, error) {
 	in := s.initTerminalOp()
 	var zero T
 	if s.err != nil {
@@ -488,7 +488,7 @@ func (s *NoBlockStream[T]) Min(comparator common.Comparator[T]) (T, error) {
 	}
 }
 
-func (s *NoBlockStream[T]) Max(comparator common.Comparator[T]) (T, error) {
+func (s *NoBlockStream[T]) Max(comparator base.Comparator[T]) (T, error) {
 	in := s.initTerminalOp()
 	var zero T
 	if s.err != nil {
@@ -553,7 +553,7 @@ func (s *NoBlockStream[T]) FindAny() (T, error) {
 	}
 }
 
-func (s *NoBlockStream[T]) Reduce(accumulator common.BinaryOperator[T]) (T, error) {
+func (s *NoBlockStream[T]) Reduce(accumulator base.BinaryOperator[T]) (T, error) {
 	in := s.initTerminalOp()
 	var result T
 	for {
@@ -571,7 +571,7 @@ func (s *NoBlockStream[T]) Reduce(accumulator common.BinaryOperator[T]) (T, erro
 	}
 }
 
-func (s *NoBlockStream[T]) ReduceByDefault(identity T, accumulator common.BinaryOperator[T]) (T, error) {
+func (s *NoBlockStream[T]) ReduceByDefault(identity T, accumulator base.BinaryOperator[T]) (T, error) {
 	in := s.initTerminalOp()
 	result := identity
 	for {

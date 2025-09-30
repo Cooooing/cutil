@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Cooooing/cutil/common/logger"
+	"github.com/Cooooing/cutil/base/logger"
 	"github.com/Cooooing/cutil/query/base"
 )
 
