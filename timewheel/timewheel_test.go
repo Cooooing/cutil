@@ -8,12 +8,12 @@ import (
 )
 
 func TestTimewheel(t *testing.T) {
-	tw := NewTimewheel(time.Millisecond*100, 100, 10, 100)
+	tw := NewTimewheel(time.Millisecond*5, 100, 10, 100)
 	tw.Start()
 	defer tw.Stop()
 	task := &Task{
 		Key:      "task1",
-		Interval: time.Millisecond * 500,
+		Interval: time.Millisecond * 10,
 		Times:    -1,
 		Job: func(task *Task) {
 			logger.Info("%s run... ", task.Key)
@@ -24,5 +24,5 @@ func TestTimewheel(t *testing.T) {
 	if err != nil {
 		t.Errorf("add task err: %v", err)
 	}
-	time.Sleep(time.Second * 10)
+	time.Sleep(time.Second * 1)
 }

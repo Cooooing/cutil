@@ -20,7 +20,8 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
       - name: Test
-        run: |
-          go test -v -race ./... -short
-          # go vet ./...
-          # go test -bench=.
+      - run: |
+          for pkg in $(go list ./...); do
+            echo "===> $pkg"
+            go test -v $pkg || exit 1
+          done
