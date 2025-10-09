@@ -11,7 +11,7 @@ import (
 // ComparableSet 适用于可比较的类型的Set集合，非线程安全
 type ComparableSet[T comparable] map[T]struct{}
 
-func NewSet[T comparable](size int) Set[T] {
+func New[T comparable](size int) Set[T] {
 	return NewComparableSet[T](size)
 }
 

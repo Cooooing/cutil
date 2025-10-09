@@ -4,20 +4,19 @@ import (
 	"sync"
 
 	"github.com/Cooooing/cutil/base"
-	"github.com/Cooooing/cutil/collections"
 )
 
 // ThreadSafeKeySet 适用于可比较的类型
-type ThreadSafeKeySet[T collections.Keyer] struct {
+type ThreadSafeKeySet[T Keyer] struct {
 	unsafeSet *KeySet[T]
 	sync.RWMutex
 }
 
-func NewThreadSafeKeySet[T collections.Keyer](size int, items ...T) Set[T] {
+func NewThreadSafeKeySet[T Keyer](size int, items ...T) Set[T] {
 	return newThreadSafeKeySet(size, items...)
 }
 
-func newThreadSafeKeySet[T collections.Keyer](size int, items ...T) *ThreadSafeKeySet[T] {
+func newThreadSafeKeySet[T Keyer](size int, items ...T) *ThreadSafeKeySet[T] {
 	s := make(KeySet[T], size)
 	s.AddAll(items...)
 	return &ThreadSafeKeySet[T]{

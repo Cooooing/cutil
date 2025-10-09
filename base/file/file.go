@@ -15,11 +15,11 @@ func Hash(reader io.Reader, algorithm HashAlgorithm) (string, error) {
 
 	var h hash.Hash
 	switch algorithm {
-	case "md5":
+	case MD5:
 		h = md5.New()
-	case "sha1":
+	case SHA1:
 		h = sha1.New()
-	case "sha256":
+	case SHA256:
 		h = sha256.New()
 	default:
 		return "", fmt.Errorf("unsupported algorithm: %s", algorithm)

@@ -1,7 +1,9 @@
 package collections
 
-// Keyer 接口，用于自定义集合元素的键值
-type Keyer interface {
-	// Key 获取键值
-	Key() string
+// Lockable 提供线程安全的锁操作接口
+type Lockable interface {
+	Lock()
+	Unlock()
+	RLock()
+	RUnlock()
 }

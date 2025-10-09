@@ -10,7 +10,7 @@ import (
 
 type ComparableMap[K comparable, V any] map[K]V
 
-func NewMap[K comparable, V any](size int) Map[K, V] {
+func New[K comparable, V any](size int) Map[K, V] {
 	return NewComparableMap[K, V](size)
 }
 
