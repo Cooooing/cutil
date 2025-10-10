@@ -284,18 +284,10 @@ func (s *KeySet[T]) IsProperSuperset(other Set[T]) bool {
 	return s.Len() > other.Len() && s.IsSuperset(other)
 }
 
-func (s *KeySet[T]) Lock() {
-	return
-}
+func (s *KeySet[T]) Lock() {}
 
-func (s *KeySet[T]) Unlock() {
-	return
-}
+func (s *KeySet[T]) Unlock() {}
 
-func (s *KeySet[T]) RLock() {
-	return
-}
+func (s *KeySet[T]) RLock() {}
 
-func (s *KeySet[T]) RUnlock() {
-	return
-}
+func (s *KeySet[T]) RUnlock() {}

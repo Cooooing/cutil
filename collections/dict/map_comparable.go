@@ -166,18 +166,10 @@ func (m *ComparableMap[K, V]) Stream(ctx context.Context) stream.Stream[*Entry[K
 	return stream.OfBlock[*Entry[K, V]](ctx, m.Entries()...)
 }
 
-func (m *ComparableMap[K, V]) Lock() {
-	return
-}
+func (m *ComparableMap[K, V]) Lock() {}
 
-func (m *ComparableMap[K, V]) Unlock() {
-	return
-}
+func (m *ComparableMap[K, V]) Unlock() {}
 
-func (m *ComparableMap[K, V]) RLock() {
-	return
-}
+func (m *ComparableMap[K, V]) RLock() {}
 
-func (m *ComparableMap[K, V]) RUnlock() {
-	return
-}
+func (m *ComparableMap[K, V]) RUnlock() {}

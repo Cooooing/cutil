@@ -288,18 +288,10 @@ func (s *ComparableSet[T]) IsProperSuperset(other Set[T]) bool {
 	return s.Len() > other.Len() && s.IsSuperset(other)
 }
 
-func (s *ComparableSet[T]) Lock() {
-	return
-}
+func (s *ComparableSet[T]) Lock() {}
 
-func (s *ComparableSet[T]) Unlock() {
-	return
-}
+func (s *ComparableSet[T]) Unlock() {}
 
-func (s *ComparableSet[T]) RLock() {
-	return
-}
+func (s *ComparableSet[T]) RLock() {}
 
-func (s *ComparableSet[T]) RUnlock() {
-	return
-}
+func (s *ComparableSet[T]) RUnlock() {}
