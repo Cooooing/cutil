@@ -10,8 +10,17 @@ import (
 
 type ComparableMap[K comparable, V any] map[K]V
 
-func NewMap[K comparable, V any](size int) Map[K, V] {
+func New[K comparable, V any](size int) Map[K, V] {
 	return NewComparableMap[K, V](size)
+}
+
+func NewFromSlice[V1 any, K comparable, V2 any](slice []V1, fn func(V1) (K, V2)) Map[K, V2] {
+	m := New[K, V2](len(slice))
+	for _, item := range slice {
+		k, v := fn(item)
+		m.Set(k, v)
+	}
+	return m
 }
 
 func NewComparableMap[K comparable, V any](size int) Map[K, V] {
@@ -71,7 +80,7 @@ func (m *ComparableMap[K, V]) ContainsAny(keys ...K) bool {
 
 func (m *ComparableMap[K, V]) Keys() []K {
 	keys := make([]K, 0, m.Len())
-	for k, _ := range *m {
+	for k := range *m {
 		keys = append(keys, k)
 	}
 	return keys
@@ -144,7 +153,7 @@ func (m *ComparableMap[K, V]) Clone() Map[K, V] {
 }
 
 func (m *ComparableMap[K, V]) Clear() {
-	for k, _ := range *m {
+	for k := range *m {
 		delete(*m, k)
 	}
 }
@@ -166,18 +175,10 @@ func (m *ComparableMap[K, V]) Stream(ctx context.Context) stream.Stream[*Entry[K
 	return stream.OfBlock[*Entry[K, V]](ctx, m.Entries()...)
 }
 
-func (m *ComparableMap[K, V]) Lock() {
-	return
-}
+func (m *ComparableMap[K, V]) Lock() {}
 
-func (m *ComparableMap[K, V]) Unlock() {
-	return
-}
+func (m *ComparableMap[K, V]) Unlock() {}
 
-func (m *ComparableMap[K, V]) RLock() {
-	return
-}
+func (m *ComparableMap[K, V]) RLock() {}
 
-func (m *ComparableMap[K, V]) RUnlock() {
-	return
-}
+func (m *ComparableMap[K, V]) RUnlock() {}

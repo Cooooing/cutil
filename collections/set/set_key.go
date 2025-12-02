@@ -6,13 +6,12 @@ import (
 	"strings"
 
 	"github.com/Cooooing/cutil/base"
-	"github.com/Cooooing/cutil/collections"
 )
 
 // KeySet 适用于自定义键值的Set集合，注意其元素需要实现collections.Keyer接口，非线程安全
-type KeySet[T collections.Keyer] map[string]T
+type KeySet[T Keyer] map[string]T
 
-func NewKeySet[T collections.Keyer](size int, items ...T) Set[T] {
+func NewKeySet[T Keyer](size int, items ...T) Set[T] {
 	s := make(KeySet[T], size)
 	s.AddAll(items...)
 	return &s
@@ -285,18 +284,10 @@ func (s *KeySet[T]) IsProperSuperset(other Set[T]) bool {
 	return s.Len() > other.Len() && s.IsSuperset(other)
 }
 
-func (s *KeySet[T]) Lock() {
-	return
-}
+func (s *KeySet[T]) Lock() {}
 
-func (s *KeySet[T]) Unlock() {
-	return
-}
+func (s *KeySet[T]) Unlock() {}
 
-func (s *KeySet[T]) RLock() {
-	return
-}
+func (s *KeySet[T]) RLock() {}
 
-func (s *KeySet[T]) RUnlock() {
-	return
-}
+func (s *KeySet[T]) RUnlock() {}

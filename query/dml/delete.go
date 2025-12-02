@@ -44,7 +44,7 @@ func (d *Delete) Build() (string, []any) {
 		sqlParts[0] += " AS " + d.tableAlias
 	}
 
-	args := []any{}
+	var args []any
 	if d.whereCond != nil {
 		whereSQL, whereArgs := d.whereCond.Build()
 		if whereSQL != "" {

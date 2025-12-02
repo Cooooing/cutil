@@ -1,6 +1,9 @@
 package set
 
-import "github.com/Cooooing/cutil/base"
+import (
+	"github.com/Cooooing/cutil/base"
+	"github.com/Cooooing/cutil/collections"
+)
 
 // Set 接口，定义集合应具备的基本操作
 type Set[T any] interface {
@@ -72,10 +75,11 @@ type Set[T any] interface {
 	// IsProperSuperset 判断是否为真超集（严格大于）
 	IsProperSuperset(other Set[T]) bool
 
-	// 线程安全锁相关
+	collections.Lockable
+}
 
-	Lock()
-	Unlock()
-	RLock()
-	RUnlock()
+// Keyer 接口，用于自定义集合元素的键值
+type Keyer interface {
+	// Key 获取键值
+	Key() string
 }

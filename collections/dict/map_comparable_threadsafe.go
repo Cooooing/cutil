@@ -5,19 +5,24 @@ import (
 	"sync"
 
 	"github.com/Cooooing/cutil/base"
-	"github.com/Cooooing/cutil/collections"
 	"github.com/Cooooing/cutil/stream"
 )
 
-type ThreadSafeMap[K string, V collections.Keyer] struct {
+type ThreadSafeMap[K comparable, V any] struct {
 	unsafeMap *ComparableMap[K, V]
 	sync.RWMutex
 }
 
-func NewSafeMap[K string, V collections.Keyer](size int) Map[K, V] {
+func NewSafeMap[K comparable, V any](size int) Map[K, V] {
 	unsafeMap := NewComparableMap[K, V](size)
 	return &ThreadSafeMap[K, V]{
 		unsafeMap: unsafeMap.(*ComparableMap[K, V]),
+	}
+}
+
+func NewSafeMapFromSlice[V1 any, K comparable, V2 any](slice []V1, fn func(V1) (K, V2)) Map[K, V2] {
+	return &ThreadSafeMap[K, V2]{
+		unsafeMap: NewFromSlice[V1, K, V2](slice, fn).(*ComparableMap[K, V2]),
 	}
 }
 

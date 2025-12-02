@@ -11,8 +11,16 @@ import (
 // ComparableSet 适用于可比较的类型的Set集合，非线程安全
 type ComparableSet[T comparable] map[T]struct{}
 
-func NewSet[T comparable](size int) Set[T] {
-	return NewComparableSet[T](size)
+func New[T comparable](size int, items ...T) Set[T] {
+	return NewComparableSet[T](size, items...)
+}
+
+func NewFromSlice[V any, T comparable](slice []V, fn func(V) T) Set[T] {
+	s := NewComparableSet[T](len(slice))
+	for _, item := range slice {
+		s.Add(fn(item))
+	}
+	return s
 }
 
 func NewComparableSet[T comparable](size int, items ...T) Set[T] {
@@ -288,18 +296,10 @@ func (s *ComparableSet[T]) IsProperSuperset(other Set[T]) bool {
 	return s.Len() > other.Len() && s.IsSuperset(other)
 }
 
-func (s *ComparableSet[T]) Lock() {
-	return
-}
+func (s *ComparableSet[T]) Lock() {}
 
-func (s *ComparableSet[T]) Unlock() {
-	return
-}
+func (s *ComparableSet[T]) Unlock() {}
 
-func (s *ComparableSet[T]) RLock() {
-	return
-}
+func (s *ComparableSet[T]) RLock() {}
 
-func (s *ComparableSet[T]) RUnlock() {
-	return
-}
+func (s *ComparableSet[T]) RUnlock() {}
